@@ -88,9 +88,9 @@
 </template>
 
 <script>
-// 자식 컴포넌트 import
 import ScheduleModal from '@/components/ScheduleModal.vue'
 import ScheduleDetailModal from '@/components/ScheduleDetailModal.vue'
+import { scheduleAPI } from '@/services/api.js'
 
 export default {
   name: 'CalendarComponent', // 또는 'ScheduleCalendar', 'MainCalendar' 등
@@ -266,43 +266,61 @@ export default {
     /**
      * 일정 저장 핸들러 (자식 컴포넌트에서 emit된 이벤트 처리)
      */
-    handleSaveSchedule(scheduleData) {
-      if (this.editingSchedule) {
-        // 기존 일정 수정
-        const index = this.schedules.findIndex(s => s.id === this.editingSchedule.id)
-        if (index !== -1) {
-          this.schedules[index] = {
-            ...scheduleData,
-            id: this.editingSchedule.id,
-            color: this.editingSchedule.color
-          }
-        }
-      } else {
-        // 새 일정 추가
-        const newSchedule = {
-          ...scheduleData,
-          id: this.scheduleIdCounter++,
-          color: this.getAvailableColor()
-        }
-        this.schedules.push(newSchedule)
-      }
+    async handleSaveSchedule(scheduleData) {
+      try {
+        if (this.editingSchedule) {
+          // 기존 일정 수정 - API 호출
+          const updatedSchedule = await scheduleAPI.updateSchedule(
+            this.editingSchedule.id,
+            scheduleData
+          )
 
-      this.closeScheduleModal()
+          // 로컬 배열 업데이트
+          const index = this.schedules.findIndex(s => s.id === this.editingSchedule.id)
+          if (index !== -1) {
+            this.schedules[index] = updatedSchedule
+          }
+
+          console.log('일정이 수정되었습니다:', updatedSchedule.title)
+        } else {
+          // 새 일정 추가 - API 호출
+          const newSchedule = {
+            ...scheduleData,
+            color: this.getAvailableColor()
+          }
+
+          const createdSchedule = await scheduleAPI.createSchedule(newSchedule)
+          this.schedules.push(createdSchedule)
+
+          console.log('새 일정이 추가되었습니다:', createdSchedule.title)
+        }
+
+        this.closeScheduleModal()
+      } catch (error) {
+        console.error('일정 저장 실패:', error)
+        alert(error.message)
+      }
     },
 
     /**
      * 일정 삭제
      */
-    deleteSchedule(schedule) {
+    async deleteSchedule(schedule) {
       if (confirm(`"${schedule.title}" 일정을 정말로 삭제하시겠습니까?`)) {
-        // 사용하던 색상을 다시 사용 가능하도록 설정
-        this.usedColors.delete(schedule.color)
+        try {
+          // API로 삭제 요청
+          await scheduleAPI.deleteSchedule(schedule.id)
 
-        // 일정 배열에서 제거
-        this.schedules = this.schedules.filter(s => s.id !== schedule.id)
+          // 로컬 배열에서 제거
+          this.usedColors.delete(schedule.color)
+          this.schedules = this.schedules.filter(s => s.id !== schedule.id)
 
-        this.closeDetailModal()
-        console.log(`일정 "${schedule.title}"이 삭제되었습니다.`)
+          this.closeDetailModal()
+          console.log(`일정 "${schedule.title}"이 삭제되었습니다.`)
+        } catch (error) {
+          console.error('일정 삭제 실패:', error)
+          alert(error.message)
+        }
       }
     },
 
@@ -456,36 +474,67 @@ export default {
     // === 데이터 저장/불러오기 메서드 ===
 
     /**
-     * 로컬 스토리지에서 일정 불러오기
+     * 서버에서 일정 불러오기
      */
-    loadSchedules() {
+    async loadSchedules() {
+      try {
+        console.log('서버에서 일정을 불러오는 중...')
+        const schedulesFromServer = await scheduleAPI.getAllSchedules()
+
+        // 서버 데이터 유효성 검사
+        if (Array.isArray(schedulesFromServer)) {
+          this.schedules = schedulesFromServer
+
+          // ID 카운터 설정 (기존 ID 중 최댓값 + 1)
+          if (this.schedules.length > 0) {
+            this.scheduleIdCounter = Math.max(...this.schedules.map(s => s.id || 0)) + 1
+          }
+
+          // 사용 중인 색상 추적
+          this.schedules.forEach(schedule => {
+            if (schedule.color) {
+              this.usedColors.add(schedule.color)
+            }
+          })
+
+          console.log(`✅ ${this.schedules.length}개의 일정을 서버에서 불러왔습니다.`)
+        }
+      } catch (error) {
+        console.error('❌ 서버에서 일정 불러오기 실패:', error)
+        alert(`서버 연결 실패: ${error.message}\n로컬 저장소 데이터를 사용합니다.`)
+
+        // 폴백: 로컬 스토리지에서 불러오기
+        this.loadSchedulesFromLocalStorage()
+      }
+    },
+
+    /**
+     * 로컬 스토리지에서 일정 불러오기 (폴백)
+     */
+    loadSchedulesFromLocalStorage() {
       try {
         const saved = localStorage.getItem('vue-calendar-schedules')
         if (saved) {
           const parsedSchedules = JSON.parse(saved)
 
-          // 데이터 유효성 검사
           if (Array.isArray(parsedSchedules)) {
             this.schedules = parsedSchedules
 
-            // ID 카운터 설정 (기존 ID 중 최댓값 + 1)
             if (this.schedules.length > 0) {
               this.scheduleIdCounter = Math.max(...this.schedules.map(s => s.id || 0)) + 1
             }
 
-            // 사용 중인 색상 추적
             this.schedules.forEach(schedule => {
               if (schedule.color) {
                 this.usedColors.add(schedule.color)
               }
             })
 
-            console.log(`${this.schedules.length}개의 일정을 불러왔습니다.`)
+            console.log(`📱 로컬 스토리지에서 ${this.schedules.length}개의 일정을 불러왔습니다.`)
           }
         }
       } catch (error) {
-        console.error('일정 불러오기 실패:', error)
-        localStorage.removeItem('vue-calendar-schedules')
+        console.error('로컬 스토리지 불러오기 실패:', error)
         this.schedules = []
       }
     },
