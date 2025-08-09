@@ -50,7 +50,7 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401) {
       error.userMessage = '인증이 필요합니다. 다시 로그인해주세요.'
       // 관리자 토큰 제거
-      localStorage.removeItem('admin-token')
+      sessionStorage.removeItem('admin-token')
     } else if (error.response?.status === 403) {
       error.userMessage = '접근 권한이 없습니다.'
     } else if (error.response?.status === 404) {
@@ -360,7 +360,7 @@ export const adminAPI = {
 
       // 토큰 저장
       if (response.data.token) {
-        localStorage.setItem('admin-token', response.data.token)
+        sessionStorage.setItem('admin-token', response.data.token)
       }
 
       return response.data
@@ -378,8 +378,8 @@ export const adminAPI = {
     } catch (error) {
       console.warn('로그아웃 API 호출 실패:', error)
     } finally {
-      // 로컬에서 토큰 제거
-      localStorage.removeItem('admin-token')
+      //토큰 제거
+      sessionStorage.removeItem('admin-token')
     }
   },
 
@@ -392,7 +392,7 @@ export const adminAPI = {
       return response.data
     // eslint-disable-next-line no-unused-vars
     } catch (error) {
-      localStorage.removeItem('admin-token')
+      sessionStorage.removeItem('admin-token')
       throw new Error('인증이 만료되었습니다.')
     }
   },
@@ -520,7 +520,7 @@ export const apiUtils = {
    * 관리자 인증 상태 확인
    */
   isAdminAuthenticated() {
-    return !!localStorage.getItem('admin-token')
+    return !!sessionStorage.getItem('admin-token')
   },
 
   /**
