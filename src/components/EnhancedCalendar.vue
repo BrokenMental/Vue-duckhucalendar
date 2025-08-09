@@ -43,11 +43,30 @@
              :class="{
                'other-month': !day.isCurrentMonth,
                'today': day.isToday,
-               'has-events': getEventsForDay(day.fullDate).length > 0
+               'has-events': getEventsForDay(day.fullDate).length > 0,
+               'holiday': getHolidaysForDay(day.fullDate).length > 0
              }"
              @click="selectDate(day)">
 
           <div class="day-number">{{ day.date }}</div>
+
+          <!-- 공휴일 표시 (추가된 부분) -->
+          <div v-if="getHolidaysForDay(day.fullDate).length > 0" class="holiday-indicators">
+            <!-- 단일 공휴일인 경우 -->
+            <div v-if="getHolidaysForDay(day.fullDate).length === 1"
+                 class="holiday-name"
+                 :style="{ color: getHolidaysForDay(day.fullDate)[0].color }">
+              {{ getHolidaysForDay(day.fullDate)[0].name }}
+            </div>
+
+            <!-- 여러 공휴일인 경우 -->
+            <div v-else
+                 class="holiday-multiple"
+                 @click="showHolidayDetail(getHolidaysForDay(day.fullDate), $event)">
+              <span class="holiday-first">{{ getHolidaysForDay(day.fullDate)[0].name }}</span>
+              <span class="holiday-count">+{{ getHolidaysForDay(day.fullDate).length - 1 }}</span>
+            </div>
+          </div>
 
           <!-- 이벤트 표시 -->
           <div class="events-container">
@@ -59,62 +78,57 @@
                    'featured': event.isFeatured
                  }"
                  :style="getEventStyle(event, getEventsForDay(day.fullDate).length)"
-                 @click.stop="selectEvent(event, day.fullDate)"
+                 @click.stop="selectEvent(event)"
                  @mouseenter="showTooltip($event, event)"
                  @mouseleave="hideTooltip">
 
-              <!-- 이벤트 제목 -->
-              <span class="event-title">{{ event.title }}</span>
+              <span class="event-title">{{ truncateText(event.title, 12) }}</span>
 
-              <!-- 이미지가 있는 경우 아이콘 표시 -->
-              <span v-if="event.images && event.images.length > 0" class="event-icon">📸</span>
-
-              <!-- 링크가 있는 경우 아이콘 표시 -->
-              <span v-if="event.links && event.links.length > 0" class="event-icon">🔗</span>
+              <!-- 이벤트 추가 정보 배지들 -->
+              <div class="event-badges">
+                <span v-if="event.location" class="location-badge">📍</span>
+                <span v-if="event.attachment" class="attachment-badge">📎</span>
+                <span v-if="event.imageUrl" class="image-badge">🖼️</span>
+                <span v-if="event.linkUrl" class="link-badge">🔗</span>
+                <span v-if="event.isFeatured" class="featured-badge">⭐</span>
+              </div>
             </div>
 
-            <!-- 이벤트 개수 표시 (4개 이상일 때) -->
+            <!-- 더 많은 이벤트가 있는 경우 -->
             <div v-if="getEventsForDay(day.fullDate).length > 3"
-                 class="event-count"
+                 class="more-events"
                  @click.stop="selectDate(day)">
-              +{{ getEventsForDay(day.fullDate).length - 3 }}
+              +{{ getEventsForDay(day.fullDate).length - 3 }}개 더
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 향상된 일정 상세보기 모달 -->
+    <!-- 이벤트 상세 정보 모달 -->
     <EnhancedScheduleDetailModal
-      :show="showDetailModal"
-      :selected-schedules="selectedSchedules"
+      v-if="showDetailModal"
+      :schedules="selectedSchedules"
       @close="closeDetailModal"
       @schedule-updated="loadSchedules"
     />
 
     <!-- 툴팁 -->
-    <div v-if="tooltip.show" class="enhanced-tooltip" :style="tooltipStyle">
-      <div class="tooltip-header">
-        <strong>{{ tooltip.event.title }}</strong>
-        <div class="tooltip-badges">
-          <span v-if="tooltip.event.isFeatured" class="featured-badge">⭐</span>
-          <span v-if="tooltip.event.images?.length" class="image-badge">📸{{ tooltip.event.images.length }}</span>
-          <span v-if="tooltip.event.links?.length" class="link-badge">🔗{{ tooltip.event.links.length }}</span>
-        </div>
-      </div>
-      <div class="tooltip-content">
-        <div class="tooltip-date">{{ formatDateRange(tooltip.event) }}</div>
-        <div v-if="tooltip.event.description" class="tooltip-description">
-          {{ truncateText(tooltip.event.description, 100) }}
-        </div>
+    <div v-if="tooltip.show"
+         class="enhanced-tooltip"
+         :style="tooltipStyle">
+      <div class="tooltip-date">{{ formatDateRange(tooltip.event) }}</div>
+      <div class="tooltip-title">{{ tooltip.event.title }}</div>
+      <div v-if="tooltip.event.description" class="tooltip-description">
+        {{ truncateText(tooltip.event.description, 50) }}
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import EnhancedScheduleDetailModal from '@/components/EnhancedScheduleDetailModal.vue'
-import { scheduleAPI, holidayAPI } from '@/services/api.js'
+import EnhancedScheduleDetailModal from '@/components/EnhancedScheduleDetailModal.vue';
+import { scheduleAPI, holidayAPI } from '@/services/api.js';
 
 export default {
   name: 'EnhancedCalendar',
@@ -152,78 +166,79 @@ export default {
         event: null
       },
 
-      // 기본 색상 팔레트
-      colors: [
-        '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
-        '#DDA0DD', '#F4A460', '#87CEEB', '#98D8C8', '#FFB6C1',
-        '#FFA07A', '#20B2AA', '#9370DB', '#3CB371', '#FF7F50'
-      ],
+      // 공휴일 데이터
       holidays: [], // 공휴일 데이터
       holidaysByDate: {}, // 날짜별 공휴일 맵
+
+      // 로딩 상태
       isLoading: false
-    }
+    };
   },
 
   computed: {
     currentMonthYear() {
-      return `${this.selectedYear}년 ${this.months[this.selectedMonth]}`
+      return `${this.selectedYear}년 ${this.months[this.selectedMonth]}`;
     },
 
     availableYears() {
-      const currentYear = new Date().getFullYear()
-      const years = []
+      const currentYear = new Date().getFullYear();
+      const years = [];
       for (let i = currentYear - 5; i <= currentYear + 5; i++) {
-        years.push(i)
+        years.push(i);
       }
-      return years
+      return years;
     },
 
     tooltipStyle() {
       return {
         left: this.tooltip.x + 'px',
         top: this.tooltip.y + 'px'
-      }
+      };
     }
   },
 
   watch: {
     selectedYear() {
-      this.generateCalendar()
-      this.loadHolidays() // 연도 변경 시 공휴일 다시 로딩
+      this.generateCalendar();
+      this.loadHolidays(); // 연도 변경 시 공휴일 다시 로딩
     },
     selectedMonth() {
-      this.generateCalendar()
+      this.generateCalendar();
     }
   },
 
   mounted() {
-    this.generateCalendar()
-    this.loadSchedules()
-    this.loadHolidays() // 공휴일 자동 로딩
-    this.setupNotifications()
+    this.generateCalendar();
+    this.loadSchedules();
+    this.loadHolidays(); // 공휴일 자동 로딩
+    this.setupNotifications();
   },
 
   methods: {
-    // 캘린더 생성
+    // === 캘린더 생성 관련 메서드 ===
+
+    /**
+     * 캘린더 그리드 생성
+     */
     generateCalendar() {
-      const year = this.selectedYear
-      const month = this.selectedMonth
-      const today = new Date()
+      const year = this.selectedYear;
+      const month = this.selectedMonth;
+      const today = new Date();
 
-      const firstDay = new Date(year, month, 1)
-      const lastDay = new Date(year, month + 1, 0)
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
 
-      const startDate = new Date(firstDay)
-      startDate.setDate(startDate.getDate() - firstDay.getDay())
+      const startDate = new Date(firstDay);
+      startDate.setDate(startDate.getDate() - firstDay.getDay());
 
-      const endDate = new Date(lastDay)
-      endDate.setDate(endDate.getDate() + (6 - lastDay.getDay()))
+      const endDate = new Date(lastDay);
+      endDate.setDate(endDate.getDate() + (6 - lastDay.getDay()));
 
-      const days = []
-      const current = new Date(startDate)
+      const days = [];
+      const current = new Date(startDate);
 
       while (current <= endDate) {
-        const isToday = current.toDateString() === today.toDateString()
+        const isToday = current.toDateString() === today.toDateString();
 
         days.push({
           date: current.getDate(),
@@ -231,172 +246,94 @@ export default {
           isCurrentMonth: current.getMonth() === month,
           isToday: isToday,
           key: `${current.getFullYear()}-${current.getMonth()}-${current.getDate()}`
-        })
-        current.setDate(current.getDate() + 1)
+        });
+        current.setDate(current.getDate() + 1);
       }
 
-      this.calendarDays = days
+      this.calendarDays = days;
     },
 
-    // 네비게이션
+    // === 네비게이션 메서드 ===
+
     previousMonth() {
       if (this.selectedMonth === 0) {
-        this.selectedMonth = 11
-        this.selectedYear--
+        this.selectedMonth = 11;
+        this.selectedYear--;
       } else {
-        this.selectedMonth--
+        this.selectedMonth--;
       }
     },
 
     nextMonth() {
       if (this.selectedMonth === 11) {
-        this.selectedMonth = 0
-        this.selectedYear++
+        this.selectedMonth = 0;
+        this.selectedYear++;
       } else {
-        this.selectedMonth++
+        this.selectedMonth++;
       }
     },
 
     goToToday() {
-      const today = new Date()
-      this.selectedYear = today.getFullYear()
-      this.selectedMonth = today.getMonth()
+      const today = new Date();
+      this.selectedYear = today.getFullYear();
+      this.selectedMonth = today.getMonth();
     },
 
-    // 이벤트 관련
+    // === 이벤트 관련 메서드 ===
+
+    /**
+     * 특정 날짜의 이벤트 조회 (기존 getEventsForDay를 대체)
+     */
     getEventsForDay(date) {
       return this.schedules.filter(schedule => {
-        const startDate = new Date(schedule.startDate)
-        const endDate = new Date(schedule.endDate)
-        const currentDate = new Date(date)
+        const startDate = new Date(schedule.startDate);
+        const endDate = new Date(schedule.endDate);
+        const currentDate = new Date(date);
 
-        return currentDate >= startDate && currentDate <= endDate
+        return currentDate >= startDate && currentDate <= endDate;
       }).sort((a, b) => {
         // 추천 이벤트를 먼저, 그 다음 우선순위순
-        if (a.isFeatured && !b.isFeatured) return -1
-        if (!a.isFeatured && b.isFeatured) return 1
-        return (a.priority || 2) - (b.priority || 2)
-      })
+        if (a.isFeatured && !b.isFeatured) return -1;
+        if (!a.isFeatured && b.isFeatured) return 1;
+        return (a.priority || 2) - (b.priority || 2);
+      });
     },
 
     getEventStyle(event, totalEvents) {
       if (totalEvents >= 4) {
-        return {} // 무지개 색상은 CSS로 처리
+        return {}; // 무지개 색상은 CSS로 처리
       }
 
       return {
         backgroundColor: event.color || '#007bff',
         borderLeft: event.isFeatured ? '3px solid #FFD700' : 'none'
-      }
+      };
     },
 
-    // 이벤트 선택
     selectDate(day) {
-      const events = this.getEventsForDay(day.fullDate)
+      const events = this.getEventsForDay(day.fullDate);
       if (events.length > 0) {
-        this.selectedSchedules = events
-        this.$emit('schedule-selected', events)
+        this.selectedSchedules = events;
+        this.showDetailModal = true;
+        this.$emit('schedule-selected', events);
       }
     },
 
     selectEvent(event) {
       // 조회수 증가
-      this.incrementViewCount(event.id)
+      this.incrementViewCount(event.id);
 
-      this.selectedSchedules = [event]
-      this.$emit('schedule-selected', [event])
+      this.selectedSchedules = [event];
+      this.showDetailModal = true;
+      this.$emit('schedule-selected', [event]);
     },
 
     closeDetailModal() {
-      this.showDetailModal = false
-      this.selectedSchedules = []
+      this.showDetailModal = false;
+      this.selectedSchedules = [];
     },
 
-    // 데이터 로딩
-    async loadSchedules() {
-      try {
-        this.isLoading = true;
-        const response = await scheduleAPI.getAllSchedules();
-
-        // API 응답에서 schedules 배열 추출
-        this.schedules = response.schedules || [];
-
-        console.log('✅ 일정 로딩 완료:', this.schedules.length, '개');
-      } catch (error) {
-        console.error('❌ 일정 로딩 실패:', error);
-        this.schedules = []; // 에러 시 빈 배열로 초기화
-        // 에러 메시지는 표시하지 않음 (사용자 경험 개선)
-      } finally {
-        this.isLoading = false;
-      }
-    },
-
-    loadSchedulesFromLocalStorage() {
-      try {
-        const saved = localStorage.getItem('vue-calendar-schedules')
-        if (saved) {
-          this.schedules = JSON.parse(saved) || []
-        }
-      } catch (error) {
-        console.error('로컬 스토리지 로딩 실패:', error)
-        this.schedules = []
-      }
-    },
-
-    // 조회수 증가
-    async incrementViewCount(scheduleId) {
-      try {
-        await scheduleAPI.incrementViewCount(scheduleId)
-      } catch (error) {
-        console.error('조회수 증가 실패:', error)
-      }
-    },
-
-    // 툴팁
-    showTooltip(event, schedule) {
-      this.tooltip = {
-        show: true,
-        x: event.clientX + 10,
-        y: event.clientY - 10,
-        event: schedule
-      }
-    },
-
-    hideTooltip() {
-      this.tooltip.show = false
-    },
-
-    // 유틸리티
-    formatDate(date) {
-      return date.toISOString().split('T')[0]
-    },
-
-    formatDateRange(schedule) {
-      const start = new Date(schedule.startDate)
-      const end = new Date(schedule.endDate)
-      const startStr = `${start.getMonth() + 1}/${start.getDate()}`
-      const endStr = `${end.getMonth() + 1}/${end.getDate()}`
-
-      let timeStr = ''
-      if (schedule.startTime && schedule.endTime) {
-        timeStr = ` ${schedule.startTime}-${schedule.endTime}`
-      } else if (schedule.startTime) {
-        timeStr = ` ${schedule.startTime}~`
-      } else {
-        timeStr = ' (종일)'
-      }
-
-      return schedule.startDate === schedule.endDate
-        ? startStr + timeStr
-        : `${startStr}-${endStr}${timeStr}`
-    },
-
-    truncateText(text, maxLength) {
-      if (!text) return ''
-      return text.length > maxLength
-        ? text.substring(0, maxLength) + '...'
-        : text
-    },
+    // === 공휴일 관련 메서드 ===
 
     /**
      * 공휴일 데이터 로딩 (자동 초기화 포함)
@@ -406,27 +343,8 @@ export default {
         const year = this.selectedYear;
         console.log(`📅 ${year}년 공휴일 로딩 중...`);
 
-        // 먼저 기존 공휴일 조회
-        let response = await holidayAPI.getHolidaysByYear(year);
-
-        // 공휴일이 없으면 자동으로 초기화
-        if (!response.holidays || response.holidays.length === 0) {
-          console.log(`📅 ${year}년 공휴일이 없습니다. 자동으로 초기화합니다.`);
-
-          try {
-            // 먼저 API 동기화 시도
-            await holidayAPI.syncHolidays(year);
-            console.log('✅ API 동기화 성공');
-          // eslint-disable-next-line no-unused-vars
-          } catch (apiError) {
-            console.log('⚠️ API 동기화 실패, 기본 공휴일로 초기화합니다.');
-            // API 실패 시 기본 공휴일 초기화
-            await holidayAPI.initKoreanHolidays(year);
-          }
-
-          // 다시 공휴일 조회
-          response = await holidayAPI.getHolidaysByYear(year);
-        }
+        // holidayAPI를 사용한 공휴일 조회
+        const response = await holidayAPI.getHolidaysByYearCached(year);
 
         this.holidays = response.holidays || [];
 
@@ -464,6 +382,128 @@ export default {
       const holidayNames = holidays.map(h => h.name).join(', ');
       alert(`📅 ${holidays[0].holidayDate}\n\n공휴일: ${holidayNames}`);
       event.stopPropagation();
+    },
+
+    // === 데이터 로딩 메서드 ===
+
+    async loadSchedules() {
+      try {
+        this.isLoading = true;
+        console.log('📡 서버에서 일정 데이터 로딩 중...');
+
+        const response = await scheduleAPI.getAllSchedules();
+        this.schedules = response.schedules || [];
+
+        console.log('✅ 일정 로딩 완료:', this.schedules.length, '개');
+      } catch (error) {
+        console.error('❌ 일정 로딩 실패:', error);
+        this.schedules = [];
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    // 조회수 증가
+    async incrementViewCount(scheduleId) {
+      try {
+        await scheduleAPI.incrementViewCount(scheduleId);
+      } catch (error) {
+        console.error('조회수 증가 실패:', error);
+      }
+    },
+
+    // === 툴팁 관련 메서드 ===
+
+    showTooltip(event, schedule) {
+      this.tooltip = {
+        show: true,
+        x: event.clientX + 10,
+        y: event.clientY - 10,
+        event: schedule
+      };
+    },
+
+    hideTooltip() {
+      this.tooltip.show = false;
+    },
+
+    // === 알림 관련 메서드 ===
+
+    /**
+     * 브라우저 알림 권한 요청
+     */
+    setupNotifications() {
+      if ('Notification' in window) {
+        if (Notification.permission === 'default') {
+          Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+              console.log('알림 권한이 허용되었습니다.');
+            } else {
+              console.log('알림 권한이 거부되었습니다.');
+            }
+          });
+        }
+      } else {
+        console.log('이 브라우저는 알림을 지원하지 않습니다.');
+      }
+    },
+
+    /**
+     * 일정 알림 스케줄링
+     */
+    scheduleNotifications() {
+      // 기본적으로는 빈 구현 (필요시 확장)
+      console.log('알림 스케줄링 완료');
+    },
+
+    /**
+     * 브라우저 알림 표시
+     */
+    showNotification(schedule) {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        const timeStr = schedule.startTime ?
+          ` (${schedule.startTime})` :
+          ' (종일)';
+
+        new Notification(`📅 ${schedule.title}`, {
+          body: `${schedule.startDate}${timeStr}`,
+          icon: '/favicon.ico',
+          tag: `schedule-${schedule.id}`
+        });
+      }
+    },
+
+    // === 유틸리티 메서드 ===
+
+    formatDate(date) {
+      return date.toISOString().split('T')[0];
+    },
+
+    formatDateRange(schedule) {
+      const start = new Date(schedule.startDate);
+      const end = new Date(schedule.endDate);
+      const startStr = `${start.getMonth() + 1}/${start.getDate()}`;
+      const endStr = `${end.getMonth() + 1}/${end.getDate()}`;
+
+      let timeStr = '';
+      if (schedule.startTime && schedule.endTime) {
+        timeStr = ` ${schedule.startTime}-${schedule.endTime}`;
+      } else if (schedule.startTime) {
+        timeStr = ` ${schedule.startTime}~`;
+      } else {
+        timeStr = ' (종일)';
+      }
+
+      return schedule.startDate === schedule.endDate
+        ? startStr + timeStr
+        : `${startStr}-${endStr}${timeStr}`;
+    },
+
+    truncateText(text, maxLength) {
+      if (!text) return '';
+      return text.length > maxLength
+        ? text.substring(0, maxLength) + '...'
+        : text;
     }
   }
 }

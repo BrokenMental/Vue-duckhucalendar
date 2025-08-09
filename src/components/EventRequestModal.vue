@@ -377,13 +377,12 @@ export default {
 
       this.sendingEmail = true
       try {
-        // 실제로는 API 호출
-        await this.simulateEmailSend()
+        await eventRequestAPI.sendVerificationCode(this.form.email)
         this.emailSent = true
         console.log('인증 이메일 전송됨:', this.form.email)
       } catch (error) {
         console.error('이메일 전송 실패:', error)
-        alert('이메일 전송에 실패했습니다. 다시 시도해주세요.')
+        alert(error.message)
       } finally {
         this.sendingEmail = false
       }
@@ -402,13 +401,12 @@ export default {
 
       this.verifying = true
       try {
-        // 실제로는 API 호출
-        await this.simulateEmailVerification()
+        await eventRequestAPI.verifyEmail(this.form.email, this.form.verificationCode)
         this.emailVerified = true
         console.log('이메일 인증 완료')
       } catch (error) {
         console.error('이메일 인증 실패:', error)
-        alert('인증 코드가 올바르지 않습니다. 다시 확인해주세요.')
+        alert(error.message)
       } finally {
         this.verifying = false
       }

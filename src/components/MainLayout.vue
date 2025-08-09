@@ -37,7 +37,7 @@
       <div class="calendar-section">
         <EnhancedCalendar
           @schedule-selected="handleScheduleSelected"
-          @schedule-updated="loadSidebarData"
+          @schedule-updated="handleScheduleUpdated"
         />
       </div>
 
@@ -172,12 +172,17 @@ export default {
       showDetailModal: false,
       selectedSchedules: [],
       upcomingEvents: [],
-      recentEvents: []
-    }
+      recentEvents: [],
+      sidebarData: {
+        totalSchedules: 0,
+        upcomingSchedules: [],
+        featuredSchedules: [],
+        todaySchedules: 0
+      }
+    };
   },
 
   mounted() {
-    this.loadSidebarData()
     this.setupClickOutside()
   },
 
@@ -199,6 +204,11 @@ export default {
     handleScheduleSelected(schedules) {
       this.selectedSchedules = schedules
       this.showDetailModal = true
+    },
+
+    handleScheduleUpdated() {
+      // 실제로 데이터 변경(추가/수정/삭제)이 있을 때만 호출되도록
+      this.loadSidebarData();
     },
 
     showEventDetail(event) {
@@ -244,39 +254,71 @@ export default {
     // 데이터 로딩
     async loadSidebarData() {
       try {
-        // 모든 일정 로딩
+        console.log('📡 사이드바 데이터 로딩 중...');
+
+        // 모든 일정 조회
         const allSchedulesResponse = await scheduleAPI.getAllSchedules();
         const allSchedules = allSchedulesResponse.schedules || [];
 
-        // 다가오는 일정 로딩
-        const upcomingResponse = await scheduleAPI.getUpcomingSchedules(7);
-        const upcomingSchedules = upcomingResponse.schedules || [];
+        // 다가오는 일정 필터링 (7일 이내)
+        const today = new Date();
+        const nextWeek = new Date();
+        nextWeek.setDate(today.getDate() + 7);
 
-        // 추천 이벤트 로딩
-        const featuredResponse = await scheduleAPI.getFeaturedSchedules(5);
-        const featuredSchedules = featuredResponse.schedules || [];
+        const upcomingSchedules = allSchedules.filter(schedule => {
+          const startDate = new Date(schedule.startDate);
+          return startDate >= today && startDate <= nextWeek;
+        }).slice(0, 5); // 최대 5개만
 
-        // 사이드바 데이터 설정
+        // 최근 추가된 일정 (생성일자 기준으로 정렬)
+        const recentSchedules = allSchedules
+          .sort((a, b) => new Date(b.createdAt || b.startDate) - new Date(a.createdAt || a.startDate))
+          .slice(0, 5); // 최대 5개만
+
+        // 오늘 일정 개수
+        const todayStr = today.toISOString().split('T')[0];
+        const todayCount = allSchedules.filter(schedule => {
+          return schedule.startDate === todayStr;
+        }).length;
+
+        // 추천 이벤트 (isFeatured가 true인 것들)
+        const featuredSchedules = allSchedules
+          .filter(schedule => schedule.isFeatured)
+          .slice(0, 5); // 최대 5개만
+
+        // 데이터 설정
+        this.upcomingEvents = upcomingSchedules;
+        this.recentEvents = recentSchedules;
         this.sidebarData = {
           totalSchedules: allSchedules.length,
-          upcomingSchedules: upcomingSchedules.slice(0, 5),
+          upcomingSchedules: upcomingSchedules,
           featuredSchedules: featuredSchedules,
-          todaySchedules: allSchedules.filter(schedule => {
-            const today = new Date().toISOString().split('T')[0];
-            return schedule.startDate === today;
-          }).length
+          todaySchedules: todayCount
         };
 
-        console.log('✅ 사이드바 데이터 로딩 완료:', this.sidebarData);
+        console.log('✅ 사이드바 데이터 로딩 완료:', {
+          전체일정: allSchedules.length,
+          다가오는일정: upcomingSchedules.length,
+          추천일정: featuredSchedules.length,
+          오늘일정: todayCount
+        });
+
       } catch (error) {
         console.error('❌ 사이드바 데이터 로딩 실패:', error);
-        // 기본값 설정
+        console.warn('🔄 서버 연결 실패. 기본값으로 초기화.');
+
+        // 기본값 설정 (에러 시)
+        this.upcomingEvents = [];
+        this.recentEvents = [];
         this.sidebarData = {
           totalSchedules: 0,
           upcomingSchedules: [],
           featuredSchedules: [],
           todaySchedules: 0
         };
+
+        // 사용자에게 너무 많은 에러 메시지를 보여주지 않음
+        // 대신 콘솔에만 에러 로그 남김
       }
     },
 
@@ -299,40 +341,47 @@ export default {
 
     // 유틸리티 함수
     formatEventDate(event) {
-      const date = new Date(event.startDate)
-      const today = new Date()
-      const diffTime = date - today
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+      const date = new Date(event.startDate);
+      const today = new Date();
+      const tomorrow = new Date();
+      tomorrow.setDate(today.getDate() + 1);
 
-      if (diffDays === 0) return '오늘'
-      if (diffDays === 1) return '내일'
-      if (diffDays === -1) return '어제'
-      if (diffDays > 0) return `${diffDays}일 후`
-      return `${Math.abs(diffDays)}일 전`
+      // 오늘, 내일 체크
+      if (date.toDateString() === today.toDateString()) {
+        return '오늘';
+      } else if (date.toDateString() === tomorrow.toDateString()) {
+        return '내일';
+      } else {
+        return date.toLocaleDateString('ko-KR', {
+          month: 'short',
+          day: 'numeric'
+        });
+      }
     },
 
     formatEventTime(event) {
       if (event.startTime && event.endTime) {
-        return `${event.startTime} - ${event.endTime}`
+        return `${event.startTime} - ${event.endTime}`;
       } else if (event.startTime) {
-        return `${event.startTime}부터`
+        return `${event.startTime}부터`;
+      } else {
+        return '종일';
       }
-      return '종일'
     },
 
     // 외부 클릭 감지
     setupClickOutside() {
       this.clickOutsideHandler = (event) => {
-        if (this.showMenu && !this.$refs.menuButton?.contains(event.target)) {
-          this.closeMenu()
+        if (this.showMenu && this.$refs.menuButton && !this.$refs.menuButton.contains(event.target)) {
+          this.closeMenu();
         }
-      }
-      document.addEventListener('click', this.clickOutsideHandler)
+      };
+      document.addEventListener('click', this.clickOutsideHandler);
     },
 
     removeClickOutside() {
       if (this.clickOutsideHandler) {
-        document.removeEventListener('click', this.clickOutsideHandler)
+        document.removeEventListener('click', this.clickOutsideHandler);
       }
     }
   }

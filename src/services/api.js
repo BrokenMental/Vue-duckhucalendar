@@ -70,20 +70,176 @@ apiClient.interceptors.response.use(
 )
 
 /**
+ * 공휴일 관련 API (공공 API 직접 호출)
+ */
+export const holidayAPI = {
+
+  /**
+   * 특정 연도의 모든 공휴일 조회
+   * @param {number} year - 연도
+   */
+  async getHolidaysByYear(year) {
+    try {
+      const response = await apiClient.get(`/holidays/year/${year}`)
+      return response.data
+    } catch (error) {
+      console.error('백엔드 공휴일 조회 실패:', error)
+      // 실패 시 기본 한국 공휴일 반환
+      return this.getDefaultKoreanHolidays(year)
+    }
+  },
+
+  /**
+   * 특정 날짜의 공휴일 조회
+   * @param {string} date - 날짜 (YYYY-MM-DD 형식)
+   */
+  async getHolidaysByDate(date) {
+    try {
+      const response = await apiClient.get(`/holidays/date/${date}`)
+      return response.data
+    } catch (error) {
+      console.error('날짜별 공휴일 조회 실패:', error)
+      return {
+        date: date,
+        holidays: [],
+        count: 0,
+        isHoliday: false
+      }
+    }
+  },
+
+  /**
+   * 특정 월의 공휴일 조회
+   * @param {number} year - 연도
+   * @param {number} month - 월 (1-12)
+   */
+  async getHolidaysByMonth(year, month) {
+    try {
+      const response = await apiClient.get(`/holidays/month/${year}/${month}`)
+      return response.data
+    } catch (error) {
+      console.error('월별 공휴일 조회 실패:', error)
+      return {
+        year: year,
+        month: month,
+        holidays: [],
+        count: 0
+      }
+    }
+  },
+
+  /**
+   * 오늘의 공휴일 조회
+   */
+  async getTodayHolidays() {
+    try {
+      const response = await apiClient.get('/holidays/today')
+      return response.data
+    } catch (error) {
+      console.error('오늘 공휴일 조회 실패:', error)
+      return {
+        date: new Date().toISOString().split('T')[0],
+        holidays: [],
+        count: 0,
+        isHoliday: false
+      }
+    }
+  },
+
+  /**
+   * API 실패 시 기본 한국 공휴일 반환
+   * @param {number} year - 연도
+   */
+  getDefaultKoreanHolidays(year) {
+    const defaultHolidays = [
+      { name: '신정', month: 1, day: 1, description: '새해 첫날' },
+      { name: '삼일절', month: 3, day: 1, description: '3·1운동 기념일' },
+      { name: '어린이날', month: 5, day: 5, description: '어린이날' },
+      { name: '현충일', month: 6, day: 6, description: '호국영령 추념일' },
+      { name: '광복절', month: 8, day: 15, description: '일제강점기 해방 기념일' },
+      { name: '개천절', month: 10, day: 3, description: '단군왕검 건국 기념일' },
+      { name: '한글날', month: 10, day: 9, description: '한글 창제 기념일' },
+      { name: '크리스마스', month: 12, day: 25, description: '성탄절' }
+    ]
+
+    const holidays = defaultHolidays.map(holiday => ({
+      id: `default-${year}-${holiday.month.toString().padStart(2, '0')}-${holiday.day.toString().padStart(2, '0')}`,
+      name: holiday.name,
+      holidayDate: `${year}-${holiday.month.toString().padStart(2, '0')}-${holiday.day.toString().padStart(2, '0')}`,
+      countryCode: 'KR',
+      holidayType: 'PUBLIC',
+      description: holiday.description,
+      isRecurring: true,
+      color: '#FF6B6B'
+    }))
+
+    return {
+      year: year,
+      holidays: holidays,
+      count: holidays.length
+    }
+  },
+
+  /**
+   * 캐시를 사용한 공휴일 조회 (성능 최적화)
+   */
+  holidayCache: new Map(),
+
+  async getHolidaysByYearCached(year) {
+    const cacheKey = `holidays-${year}`
+
+    if (this.holidayCache.has(cacheKey)) {
+      console.log(`📋 ${year}년 공휴일 캐시에서 로딩`)
+      return this.holidayCache.get(cacheKey)
+    }
+
+    try {
+      const holidays = await this.getHolidaysByYear(year)
+      this.holidayCache.set(cacheKey, holidays)
+      console.log(`🌐 ${year}년 공휴일 백엔드에서 로딩 후 캐시 저장`)
+      return holidays
+    } catch (error) {
+      console.error('캐시된 공휴일 조회 실패:', error)
+      return this.getDefaultKoreanHolidays(year)
+    }
+  }
+}
+
+/**
  * 향상된 일정 관련 API 함수들
  */
 export const scheduleAPI = {
 
   /**
-   * 모든 일정 조회
+   * 모든 일정 조회 (재시도 로직 포함)
    */
   async getAllSchedules() {
+  const maxRetries = 3;
+  let retryCount = 0;
+
+  while (retryCount < maxRetries) {
     try {
-      const response = await apiClient.get('/schedules')
-      return response.data
+      console.log(`📡 일정 조회 시도 ${retryCount + 1}/${maxRetries}...`);
+      const response = await apiClient.get('/schedules');
+      console.log('✅ 일정 조회 성공!');
+      return response.data;
+
     } catch (error) {
-      throw new Error(error.userMessage || '일정을 불러오는데 실패했습니다.')
+      retryCount++;
+      console.warn(`❌ 일정 조회 실패 (${retryCount}/${maxRetries}):`, error.message);
+
+      // 최대 재시도 횟수에 도달한 경우
+      if (retryCount >= maxRetries) {
+        console.error('🚨 최대 재시도 횟수 초과. 에러 발생.');
+        throw new Error(error.userMessage || '일정을 불러오는데 실패했습니다.');
+      }
+
+      // 재시도 전 대기 (500ms, 1s, 1.5s)
+      const delayMs = 500 * retryCount;
+      console.log(`⏳ ${delayMs}ms 후 재시도...`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
     }
+  }
   },
 
   /**
@@ -257,7 +413,7 @@ export const eventRequestAPI = {
    */
   async submitEventRequest(requestData) {
     try {
-      const response = await apiClient.post('/event-requests', requestData)
+      const response = await apiClient.post('/event-requests/submit', requestData)  // /submit 경로 추가
       return response.data
     } catch (error) {
       throw new Error(error.userMessage || '이벤트 요청 제출에 실패했습니다.')
@@ -293,6 +449,30 @@ export const eventRequestAPI = {
       return responseData.data
     } catch (error) {
       throw new Error(error.userMessage || '이벤트 요청 처리에 실패했습니다.')
+    }
+  },
+
+  /**
+   * 이메일 인증 코드 전송
+   */
+  async sendVerificationCode(email) {
+    try {
+      const response = await apiClient.post('/event-requests/send-verification', { email })
+      return response.data
+    } catch (error) {
+      throw new Error(error.response?.data?.message || '인증 코드 전송에 실패했습니다.')
+    }
+  },
+
+  /**
+   * 이메일 인증 확인
+   */
+  async verifyEmail(email, code) {
+    try {
+      const response = await apiClient.post('/event-requests/verify-email', { email, code })
+      return response.data
+    } catch (error) {
+      throw new Error(error.response?.data?.message || '이메일 인증에 실패했습니다.')
     }
   }
 }
@@ -345,40 +525,52 @@ export const emailSubscriptionAPI = {
  * 관리자 인증 관련 API
  */
 export const adminAPI = {
-
   /**
-   * 관리자 로그인 (임시 비밀번호 요청)
-   * @param {string} email - 관리자 이메일
+   * 임시 비밀번호 요청
    */
   async requestTempPassword(email) {
     try {
       const response = await apiClient.post('/admin/request-temp-password', { email })
       return response.data
     } catch (error) {
-      throw new Error(error.userMessage || '임시 비밀번호 요청에 실패했습니다.')
+      throw new Error(error.response?.data?.message || '임시 비밀번호 요청에 실패했습니다.')
     }
   },
 
   /**
-   * 임시 비밀번호로 로그인
-   * @param {string} email - 관리자 이메일
-   * @param {string} tempPassword - 임시 비밀번호
+   * 관리자 로그인
    */
-  async loginWithTempPassword(email, tempPassword) {
+  async login(email, password) {
     try {
       const response = await apiClient.post('/admin/login', {
         email,
-        tempPassword
+        tempPassword: password
       })
-
-      // 토큰 저장
-      if (response.data.token) {
-        sessionStorage.setItem('admin-token', response.data.token)
-      }
-
       return response.data
     } catch (error) {
-      throw new Error(error.userMessage || '관리자 로그인에 실패했습니다.')
+      throw new Error(error.response?.data?.message || '로그인에 실패했습니다.')
+    }
+  },
+
+  /**
+   * 토큰 검증
+   */
+  async checkAuth() {
+    const token = sessionStorage.getItem('admin-token')
+    if (!token) {
+      throw new Error('토큰이 없습니다.')
+    }
+
+    try {
+      const response = await apiClient.get('/admin/me', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      return response.data
+    // eslint-disable-next-line no-unused-vars
+    } catch (error) {
+      throw new Error('토큰 검증에 실패했습니다.')
     }
   },
 
@@ -393,20 +585,6 @@ export const adminAPI = {
     } finally {
       //토큰 제거
       sessionStorage.removeItem('admin-token')
-    }
-  },
-
-  /**
-   * 관리자 인증 상태 확인
-   */
-  async checkAuth() {
-    try {
-      const response = await apiClient.get('/admin/me')
-      return response.data
-    // eslint-disable-next-line no-unused-vars
-    } catch (error) {
-      sessionStorage.removeItem('admin-token')
-      throw new Error('인증이 만료되었습니다.')
     }
   },
 

@@ -39,6 +39,16 @@ const routes = [
       adminOnly: true
     }
   },
+  {
+    path: '/admin-login',
+    name: 'AdminLogin',
+    component: () => import('@/views/AdminLoginView.vue'),
+    meta: {
+      title: '관리자 로그인',
+      description: '관리자 로그인 페이지입니다',
+      requiresAuth: false
+    }
+  },
   // 기존 캘린더 뷰로 리다이렉트 (호환성 유지)
   {
     path: '/calendar',
@@ -84,13 +94,31 @@ router.beforeEach(async (to, from, next) => {
 
   // 관리자 페이지 접근 제어
   if (to.meta.requiresAuth && to.meta.adminOnly) {
-    const adminToken = sessionStorage.getItem('admin-token') // localStorage → sessionStorage
+    const adminToken = sessionStorage.getItem('admin-token')
 
     if (!adminToken) {
       console.log('관리자 인증이 필요합니다.')
-      alert('관리자 로그인이 필요합니다.')
-      next('/')
-      return
+
+      // 새 탭으로 관리자 로그인 페이지 열기
+      const loginWindow = window.open('/admin-login', '_blank', 'width=500,height=600,scrollbars=yes,resizable=yes')
+
+      // 로그인 완료 감지를 위한 이벤트 리스너 (옵션)
+      if (loginWindow) {
+        const checkClosed = setInterval(() => {
+          if (loginWindow.closed) {
+            clearInterval(checkClosed)
+            // 로그인 창이 닫히면 토큰 다시 확인
+            const newToken = sessionStorage.getItem('admin-token')
+            if (newToken) {
+              next() // 토큰이 있으면 페이지 진행
+            } else {
+              next('/') // 토큰이 없으면 홈으로
+            }
+          }
+        }, 1000)
+      }
+
+      return // next()를 호출하지 않음으로써 네비게이션 중단
     }
 
     try {
@@ -100,8 +128,11 @@ router.beforeEach(async (to, from, next) => {
       next()
     } catch (error) {
       console.error('관리자 인증 실패:', error)
-      sessionStorage.removeItem('admin-token') // localStorage → sessionStorage
+      sessionStorage.removeItem('admin-token')
       alert('관리자 인증이 만료되었습니다. 다시 로그인해주세요.')
+
+      // 새 탭으로 로그인 페이지 열기
+      window.open('/admin-login', '_blank', 'width=500,height=600')
       next('/')
     }
   } else {
