@@ -37,6 +37,7 @@
       <div class="calendar-section">
         <EnhancedCalendar
           @schedule-selected="handleScheduleSelected"
+          @schedules-loaded="handleSchedulesLoaded"
           @schedule-updated="handleScheduleUpdated"
         />
       </div>
@@ -200,7 +201,28 @@ export default {
       this.showMenu = false
     },
 
-    // 이벤트 핸들링
+    handleSchedulesLoaded(schedules) {
+      this.updateSidebarData(schedules);
+    },
+
+    updateSidebarData(schedules) {
+      const today = new Date().toISOString().split('T')[0];
+
+      this.sidebarData = {
+        totalSchedules: schedules.length,
+        upcomingSchedules: schedules.filter(s => s.startDate >= today).slice(0, 5),
+        featuredSchedules: schedules.filter(s => s.isFeatured),
+        todaySchedules: schedules.filter(s => s.startDate === today).length
+      };
+
+      this.upcomingEvents = schedules
+        .filter(s => s.startDate >= today)
+        .sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
+        .slice(0, 3);
+
+      console.log('✅ 사이드바 데이터 업데이트 완료:', this.sidebarData);
+    },
+
     handleScheduleSelected(schedules) {
       this.selectedSchedules = schedules
       this.showDetailModal = true

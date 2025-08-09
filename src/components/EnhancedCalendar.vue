@@ -145,6 +145,7 @@ export default {
       currentDate: new Date(),
       selectedYear: new Date().getFullYear(),
       selectedMonth: new Date().getMonth(),
+      cachedMonths: new Map(), // 캐시
 
       // 캘린더 데이터
       months: ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'],
@@ -200,16 +201,18 @@ export default {
   watch: {
     selectedYear() {
       this.generateCalendar();
+      this.loadMonthSchedules(); // 월별 데이터
       this.loadHolidays(); // 연도 변경 시 공휴일 다시 로딩
     },
     selectedMonth() {
       this.generateCalendar();
+      this.loadMonthSchedules(); // 월별 데이터
     }
   },
 
   mounted() {
     this.generateCalendar();
-    this.loadSchedules();
+    this.loadMonthSchedules();
     this.loadHolidays(); // 공휴일 자동 로딩
     this.setupNotifications();
   },
@@ -386,20 +389,71 @@ export default {
 
     // === 데이터 로딩 메서드 ===
 
-    async loadSchedules() {
+    async loadMonthSchedules() {
       try {
         this.isLoading = true;
-        console.log('📡 서버에서 일정 데이터 로딩 중...');
 
-        const response = await scheduleAPI.getAllSchedules();
+        const year = this.selectedYear;
+        const month = this.selectedMonth + 1; // JavaScript는 0부터, API는 1부터
+        const cacheKey = `${year}-${month}`;
+
+        // 캐시 확인
+        if (this.cachedMonths.has(cacheKey)) {
+          console.log(`📦 캐시에서 ${year}년 ${month}월 데이터 로드`);
+          this.schedules = this.cachedMonths.get(cacheKey);
+          this.$emit('schedules-loaded', this.schedules);
+          return;
+        }
+
+        console.log(`📡 서버에서 ${year}년 ${month}월 일정 로딩 중...`);
+
+        const response = await scheduleAPI.getSchedulesByMonth(year, month);
         this.schedules = response.schedules || [];
 
-        console.log('✅ 일정 로딩 완료:', this.schedules.length, '개');
+        // 캐시에 저장 (5분간 유지)
+        this.cachedMonths.set(cacheKey, this.schedules);
+        setTimeout(() => {
+          this.cachedMonths.delete(cacheKey);
+        }, 5 * 60 * 1000);
+
+        console.log(`✅ ${year}년 ${month}월 일정 ${this.schedules.length}개 로딩 완료`);
+
+        // MainLayout의 사이드바 업데이트
+        this.$emit('schedules-loaded', this.schedules);
+
       } catch (error) {
-        console.error('❌ 일정 로딩 실패:', error);
+        console.error('❌ 월별 일정 로딩 실패:', error);
         this.schedules = [];
       } finally {
         this.isLoading = false;
+      }
+    },
+
+    // 캐시 초기화 메서드 (일정 추가/수정/삭제 시 호출)
+    clearCache() {
+      this.cachedMonths.clear();
+      this.loadMonthSchedules(); // 현재 월 다시 로드
+    },
+
+    // 인접 월 프리로딩 (선택적)
+    async preloadAdjacentMonths() {
+      const prevMonth = this.selectedMonth === 0 ? 12 : this.selectedMonth;
+      const prevYear = this.selectedMonth === 0 ? this.selectedYear - 1 : this.selectedYear;
+      const nextMonth = this.selectedMonth === 11 ? 1 : this.selectedMonth + 2;
+      const nextYear = this.selectedMonth === 11 ? this.selectedYear + 1 : this.selectedYear;
+
+      // 백그라운드에서 조용히 로드
+      try {
+        const [prevResponse, nextResponse] = await Promise.all([
+          scheduleAPI.getSchedulesByMonth(prevYear, prevMonth),
+          scheduleAPI.getSchedulesByMonth(nextYear, nextMonth)
+        ]);
+
+        this.cachedMonths.set(`${prevYear}-${prevMonth}`, prevResponse.schedules);
+        this.cachedMonths.set(`${nextYear}-${nextMonth}`, nextResponse.schedules);
+      // eslint-disable-next-line no-unused-vars
+      } catch (error) {
+        console.log('인접 월 프리로딩 실패 (무시)');
       }
     },
 

@@ -309,6 +309,27 @@ export const scheduleAPI = {
   },
 
   /**
+   * 특정 월의 일정 조회
+   * @param {string} year - 연도
+   * @param {string} month - 월
+   */
+  getSchedulesByMonth: async (year, month) => {
+    try {
+      console.log(`📅 ${year}년 ${month}월 일정 조회 중...`);
+
+      // PathVariable 방식 사용
+      const response = await axios.get(`${API_BASE_URL}/schedules/month/${year}/${month}`);
+
+      console.log(`✅ ${year}년 ${month}월 일정 ${response.data.count}개 조회 완료`);
+      return response.data;
+
+    } catch (error) {
+      console.error('❌ 월별 일정 조회 실패:', error);
+      throw error;
+    }
+  },
+
+  /**
    * 날짜 범위별 일정 조회
    * @param {string} startDate - 시작 날짜
    * @param {string} endDate - 종료 날짜
