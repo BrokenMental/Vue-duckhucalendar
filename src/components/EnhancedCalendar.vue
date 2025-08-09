@@ -114,7 +114,7 @@
 
 <script>
 import EnhancedScheduleDetailModal from '@/components/EnhancedScheduleDetailModal.vue'
-import { scheduleAPI } from '@/services/api.js'
+import { scheduleAPI, holidayAPI } from '@/services/api.js'
 
 export default {
   name: 'EnhancedCalendar',
@@ -157,7 +157,10 @@ export default {
         '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
         '#DDA0DD', '#F4A460', '#87CEEB', '#98D8C8', '#FFB6C1',
         '#FFA07A', '#20B2AA', '#9370DB', '#3CB371', '#FF7F50'
-      ]
+      ],
+      holidays: [], // 공휴일 데이터
+      holidaysByDate: {}, // 날짜별 공휴일 맵
+      isLoading: false
     }
   },
 
@@ -186,6 +189,7 @@ export default {
   watch: {
     selectedYear() {
       this.generateCalendar()
+      this.loadHolidays() // 연도 변경 시 공휴일 다시 로딩
     },
     selectedMonth() {
       this.generateCalendar()
@@ -195,6 +199,8 @@ export default {
   mounted() {
     this.generateCalendar()
     this.loadSchedules()
+    this.loadHolidays() // 공휴일 자동 로딩
+    this.setupNotifications()
   },
 
   methods: {
@@ -309,13 +315,19 @@ export default {
     // 데이터 로딩
     async loadSchedules() {
       try {
-        const schedules = await scheduleAPI.getAllSchedules()
-        this.schedules = schedules || []
-        this.$emit('schedule-updated')
+        this.isLoading = true;
+        const response = await scheduleAPI.getAllSchedules();
+
+        // API 응답에서 schedules 배열 추출
+        this.schedules = response.schedules || [];
+
+        console.log('✅ 일정 로딩 완료:', this.schedules.length, '개');
       } catch (error) {
-        console.error('일정 로딩 실패:', error)
-        // 폴백으로 로컬 스토리지에서 로딩
-        this.loadSchedulesFromLocalStorage()
+        console.error('❌ 일정 로딩 실패:', error);
+        this.schedules = []; // 에러 시 빈 배열로 초기화
+        // 에러 메시지는 표시하지 않음 (사용자 경험 개선)
+      } finally {
+        this.isLoading = false;
       }
     },
 
@@ -384,6 +396,74 @@ export default {
       return text.length > maxLength
         ? text.substring(0, maxLength) + '...'
         : text
+    },
+
+    /**
+     * 공휴일 데이터 로딩 (자동 초기화 포함)
+     */
+    async loadHolidays() {
+      try {
+        const year = this.selectedYear;
+        console.log(`📅 ${year}년 공휴일 로딩 중...`);
+
+        // 먼저 기존 공휴일 조회
+        let response = await holidayAPI.getHolidaysByYear(year);
+
+        // 공휴일이 없으면 자동으로 초기화
+        if (!response.holidays || response.holidays.length === 0) {
+          console.log(`📅 ${year}년 공휴일이 없습니다. 자동으로 초기화합니다.`);
+
+          try {
+            // 먼저 API 동기화 시도
+            await holidayAPI.syncHolidays(year);
+            console.log('✅ API 동기화 성공');
+          // eslint-disable-next-line no-unused-vars
+          } catch (apiError) {
+            console.log('⚠️ API 동기화 실패, 기본 공휴일로 초기화합니다.');
+            // API 실패 시 기본 공휴일 초기화
+            await holidayAPI.initKoreanHolidays(year);
+          }
+
+          // 다시 공휴일 조회
+          response = await holidayAPI.getHolidaysByYear(year);
+        }
+
+        this.holidays = response.holidays || [];
+
+        // 날짜별 공휴일 맵 생성
+        this.holidaysByDate = {};
+        this.holidays.forEach(holiday => {
+          const date = holiday.holidayDate;
+          if (!this.holidaysByDate[date]) {
+            this.holidaysByDate[date] = [];
+          }
+          this.holidaysByDate[date].push(holiday);
+        });
+
+        console.log(`✅ ${year}년 공휴일 ${this.holidays.length}개 로딩 완료`);
+      } catch (error) {
+        console.error('❌ 공휴일 로딩 실패:', error);
+        // 실패해도 계속 진행 (공휴일 없이)
+        this.holidays = [];
+        this.holidaysByDate = {};
+      }
+    },
+
+    /**
+     * 특정 날짜의 공휴일 조회
+     */
+    getHolidaysForDay(date) {
+      return this.holidaysByDate[date] || [];
+    },
+
+    /**
+     * 공휴일 팝업 표시
+     */
+    showHolidayDetail(holidays, event) {
+      // 간단한 alert으로 표시 (나중에 모달로 개선 가능)
+      const holidayNames = holidays.map(h => h.name).join(', ');
+      alert(`📅 ${holidays[0].holidayDate}\n\n공휴일: ${holidayNames}`);
+      event.stopPropagation();
     }
   }
 }
@@ -692,6 +772,192 @@ export default {
   font-size: 12px;
   line-height: 1.4;
   color: #e0e0e0;
+}
+
+/* 공휴일이 있는 날짜 셀 */
+.day-cell.holiday {
+  background: linear-gradient(135deg, #fff5f5 0%, #ffe0e0 100%);
+  border: 1px solid #ffcccb;
+}
+
+/* 오늘이면서 공휴일인 경우 */
+.day-cell.today.holiday {
+  background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+  border: 2px solid #ff6b6b;
+  box-shadow: 0 0 0 2px rgba(255, 107, 107, 0.3);
+}
+
+/* 공휴일 표시 영역 */
+.holiday-indicators {
+  margin-bottom: 4px;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+/* 단일 공휴일 표시 */
+.holiday-name {
+  font-weight: 600;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: rgba(255, 107, 107, 0.15);
+  color: #e53e3e;
+  text-align: center;
+  cursor: default;
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  font-size: 9px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 다중 공휴일 표시 */
+.holiday-multiple {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: rgba(255, 107, 107, 0.15);
+  color: #e53e3e;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  font-size: 9px;
+}
+
+.holiday-multiple:hover {
+  background: rgba(255, 107, 107, 0.25);
+  transform: scale(1.02);
+  box-shadow: 0 1px 3px rgba(255, 107, 107, 0.3);
+}
+
+.holiday-first {
+  font-weight: 600;
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 4px;
+}
+
+.holiday-count {
+  font-weight: 700;
+  background: #e53e3e;
+  color: white;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  min-width: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* 공휴일 상세 팝업 (간단한 버전) */
+.holiday-popup {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+  z-index: 9999;
+  max-width: 300px;
+  width: 90%;
+}
+
+.holiday-popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 9998;
+}
+
+.holiday-popup h3 {
+  margin: 0 0 12px 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.holiday-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px 0;
+}
+
+.holiday-list li {
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+  color: #666;
+}
+
+.holiday-list li:last-child {
+  border-bottom: none;
+}
+
+.holiday-popup-close {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  width: 100%;
+}
+
+/* 작은 화면에서 공휴일 표시 최적화 */
+@media (max-width: 768px) {
+  .holiday-name,
+  .holiday-multiple {
+    font-size: 8px;
+    padding: 1px 2px;
+  }
+
+  .holiday-count {
+    width: 14px;
+    height: 14px;
+    font-size: 7px;
+    min-width: 14px;
+  }
+
+  .holiday-first {
+    margin-right: 2px;
+  }
+}
+
+/* 다크 테마 지원 */
+[data-theme="dark"] .day-cell.holiday {
+  background: linear-gradient(135deg, #2d1b1b 0%, #3d2020 100%);
+  border-color: #4a2525;
+}
+
+[data-theme="dark"] .holiday-name,
+[data-theme="dark"] .holiday-multiple {
+  background: rgba(255, 107, 107, 0.2);
+  color: #ff8a80;
+  border-color: rgba(255, 107, 107, 0.4);
+}
+
+[data-theme="dark"] .holiday-popup {
+  background: #2d2d2d;
+  color: white;
+}
+
+[data-theme="dark"] .holiday-popup h3 {
+  color: white;
+}
+
+[data-theme="dark"] .holiday-list li {
+  color: #ccc;
+  border-bottom-color: #444;
 }
 
 /* 반응형 디자인 */

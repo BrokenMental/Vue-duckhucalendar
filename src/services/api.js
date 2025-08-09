@@ -180,6 +180,19 @@ export const scheduleAPI = {
   },
 
   /**
+   * 추천 이벤트 목록 조회
+   * @param {number} limit - 최대 개수
+   */
+  async getFeaturedSchedules(limit = 10) {
+    try {
+      const response = await apiClient.get(`/schedules/featured?limit=${limit}`);
+      return response.data;
+    } catch (error) {
+      throw new Error(error.userMessage || '추천 이벤트를 불러오는데 실패했습니다.');
+    }
+  },
+
+  /**
    * 오늘의 일정 조회
    */
   async getTodaySchedules() {

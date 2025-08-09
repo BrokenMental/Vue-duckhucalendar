@@ -35,27 +35,39 @@
 
         <!-- 날짜 셀 -->
         <div v-for="day in calendarDays" :key="day.key"
-             class="day-cell"
-             :class="{ 'other-month': !day.isCurrentMonth }"
-             @click="selectDate(day)">
+            class="day-cell"
+            :class="{
+              'other-month': !day.isCurrentMonth,
+              'today': day.isToday,
+              'holiday': getHolidaysForDay(day.fullDate).length > 0
+            }"
+            @click="selectDate(day)">
+
           <div class="day-number">{{ day.date }}</div>
 
-          <!-- 일정 바 표시 -->
-          <div v-for="(schedule, index) in getSchedulesForDay(day.fullDate)"
-               :key="schedule.id"
-               v-show="index < 3"
-               class="schedule-bar"
-               :class="{ rainbow: getSchedulesForDay(day.fullDate).length >= 4 }"
-               :style="{ backgroundColor: getSchedulesForDay(day.fullDate).length >= 4 ? '' : schedule.color }"
-               @click.stop="openScheduleDetail(schedule, day.fullDate)"
-               @mouseenter="showTooltip($event, schedule)"
-               @mouseleave="hideTooltip">
-            {{ schedule.title }}
+          <!-- 공휴일 표시 -->
+          <div v-if="getHolidaysForDay(day.fullDate).length > 0" class="holiday-indicators">
+            <div v-if="getHolidaysForDay(day.fullDate).length === 1"
+                class="holiday-name"
+                :style="{ color: getHolidaysForDay(day.fullDate)[0].color }">
+              {{ getHolidaysForDay(day.fullDate)[0].name }}
+            </div>
+            <div v-else class="holiday-multiple"
+                @click="showHolidayDetail(getHolidaysForDay(day.fullDate), $event)">
+              <span class="holiday-first">{{ getHolidaysForDay(day.fullDate)[0].name }}</span>
+              <span class="holiday-count">+{{ getHolidaysForDay(day.fullDate).length - 1 }}</span>
+            </div>
           </div>
 
-          <!-- 일정 개수 표시 (4개 이상일 때) -->
-          <div v-if="getSchedulesForDay(day.fullDate).length > 3" class="schedule-count">
-            {{ getSchedulesForDay(day.fullDate).length }}
+          <!-- 기존 일정 바 표시 -->
+          <div v-for="(schedule, index) in getSchedulesForDay(day.fullDate)"
+              :key="schedule.id"
+              v-show="index < 3"
+              class="schedule-bar"
+              :class="{ rainbow: getSchedulesForDay(day.fullDate).length >= 4 }"
+              :style="{ backgroundColor: getSchedulesForDay(day.fullDate).length >= 4 ? '' : schedule.color }"
+              @click.stop="openScheduleDetail(schedule, day.fullDate)">
+            {{ schedule.title }}
           </div>
         </div>
       </div>
@@ -106,6 +118,8 @@ export default {
       currentDate: new Date(),
       selectedYear: new Date().getFullYear(),
       selectedMonth: new Date().getMonth(),
+      holidays: [], // 공휴일 데이터
+      holidaysByDate: {}, // 날짜별 공휴일 맵
 
       // 캘린더 기본 데이터
       months: [
@@ -159,12 +173,13 @@ export default {
   watch: {
     // 선택된 연도가 변경되면 캘린더 재생성
     selectedYear() {
-      this.generateCalendar()
+      this.generateCalendar();
+      this.loadHolidays(); // 연도 변경 시 공휴일 다시 로딩
     },
 
     // 선택된 월이 변경되면 캘린더 재생성
     selectedMonth() {
-      this.generateCalendar()
+      this.generateCalendar();
     },
 
     // 일정 배열이 변경되면 자동 저장 및 알림 재설정
@@ -182,6 +197,7 @@ export default {
     console.log('캘린더 컴포넌트가 로드되었습니다.')
     this.generateCalendar()     // 캘린더 생성
     this.loadSchedules()        // 저장된 일정 불러오기
+    this.loadHolidays();        // 공휴일 로딩 추가
     this.setupNotifications()   // 브라우저 알림 권한 요청
   },
 
@@ -637,6 +653,47 @@ export default {
           notification.close()
         }, 10000)
       }
+    },
+
+    /**
+     * 공휴일 데이터 로딩
+     */
+    async loadHolidays() {
+      try {
+        const year = this.selectedYear;
+        // eslint-disable-next-line no-undef
+        const response = await axios.get(`/api/holidays/year/${year}`);
+        this.holidays = response.data.holidays || [];
+
+        // 날짜별 공휴일 맵 생성
+        this.holidaysByDate = {};
+        this.holidays.forEach(holiday => {
+          const date = holiday.holidayDate;
+          if (!this.holidaysByDate[date]) {
+            this.holidaysByDate[date] = [];
+          }
+          this.holidaysByDate[date].push(holiday);
+        });
+      } catch (error) {
+        console.error('공휴일 로딩 실패:', error);
+      }
+    },
+
+    /**
+     * 특정 날짜의 공휴일 조회
+     */
+    getHolidaysForDay(date) {
+      return this.holidaysByDate[date] || [];
+    },
+
+    /**
+     * 공휴일 팝업 표시
+     */
+    showHolidayDetail(holidays, event) {
+      // 공휴일 상세 정보 모달 표시
+      this.selectedHolidays = holidays;
+      this.showHolidayModal = true;
+      event.stopPropagation();
     }
   }
 }
@@ -866,6 +923,77 @@ export default {
   transform: translateX(-50%);
   border: 4px solid transparent;
   border-top-color: rgba(0, 0, 0, 0.8);
+}
+
+/* 공휴일이 있는 날짜 셀 */
+.day-cell.holiday {
+  background: linear-gradient(135deg, #fff5f5 0%, #ffe0e0 100%);
+}
+
+/* 공휴일 표시 영역 */
+.holiday-indicators {
+  margin-bottom: 4px;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+/* 단일 공휴일 표시 */
+.holiday-name {
+  font-weight: 600;
+  padding: 1px 3px;
+  border-radius: 2px;
+  background: rgba(255, 107, 107, 0.1);
+  color: #e53e3e;
+  text-align: center;
+  cursor: default;
+}
+
+/* 다중 공휴일 표시 */
+.holiday-multiple {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1px 3px;
+  border-radius: 2px;
+  background: rgba(255, 107, 107, 0.1);
+  color: #e53e3e;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.holiday-multiple:hover {
+  background: rgba(255, 107, 107, 0.2);
+  transform: scale(1.05);
+}
+
+.holiday-first {
+  font-weight: 600;
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.holiday-count {
+  font-weight: 700;
+  background: #e53e3e;
+  color: white;
+  border-radius: 50%;
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  margin-left: 2px;
+}
+
+/* 오늘이면서 공휴일인 경우 */
+.day-cell.today.holiday {
+  background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+  border-color: #ff6b6b;
+  box-shadow: 0 0 0 2px rgba(255, 107, 107, 0.3);
 }
 
 /* 반응형 디자인 */

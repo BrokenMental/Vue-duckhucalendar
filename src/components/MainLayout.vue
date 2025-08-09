@@ -244,18 +244,39 @@ export default {
     // 데이터 로딩
     async loadSidebarData() {
       try {
-        // 다가오는 이벤트 (오늘부터 7일간)
-        const upcomingResponse = await scheduleAPI.getUpcomingSchedules(7)
-        this.upcomingEvents = upcomingResponse.schedules || []
+        // 모든 일정 로딩
+        const allSchedulesResponse = await scheduleAPI.getAllSchedules();
+        const allSchedules = allSchedulesResponse.schedules || [];
 
-        // 최근 추가된 이벤트 (최근 10개)
-        const allSchedules = await scheduleAPI.getAllSchedules()
-        this.recentEvents = allSchedules
-          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-          .slice(0, 5)
+        // 다가오는 일정 로딩
+        const upcomingResponse = await scheduleAPI.getUpcomingSchedules(7);
+        const upcomingSchedules = upcomingResponse.schedules || [];
 
+        // 추천 이벤트 로딩
+        const featuredResponse = await scheduleAPI.getFeaturedSchedules(5);
+        const featuredSchedules = featuredResponse.schedules || [];
+
+        // 사이드바 데이터 설정
+        this.sidebarData = {
+          totalSchedules: allSchedules.length,
+          upcomingSchedules: upcomingSchedules.slice(0, 5),
+          featuredSchedules: featuredSchedules,
+          todaySchedules: allSchedules.filter(schedule => {
+            const today = new Date().toISOString().split('T')[0];
+            return schedule.startDate === today;
+          }).length
+        };
+
+        console.log('✅ 사이드바 데이터 로딩 완료:', this.sidebarData);
       } catch (error) {
-        console.error('사이드바 데이터 로딩 실패:', error)
+        console.error('❌ 사이드바 데이터 로딩 실패:', error);
+        // 기본값 설정
+        this.sidebarData = {
+          totalSchedules: 0,
+          upcomingSchedules: [],
+          featuredSchedules: [],
+          todaySchedules: 0
+        };
       }
     },
 
