@@ -345,7 +345,7 @@
 </template>
 
 <script>
-import { scheduleAPI, adminAPI, eventRequestAPI, emailSubscriptionAPI } from '@/api/api.js'
+import { scheduleAPI, adminAPI, eventRequestAPI, emailSubscriptionAPI } from '@/services/api.js'
 
 export default {
   name: 'AdminView',
