@@ -510,6 +510,61 @@ export const eventRequestAPI = {
     }
   },
 
+
+  /**
+   * 이벤트 요청 제출 (일반 사용자)
+   * @param {Object} requestData - 요청 데이터
+   */
+  async submitRequest(requestData) {
+    try {
+      const response = await apiClient.post('/event-requests/submit', requestData)
+      return response.data
+    } catch (error) {
+      throw new Error(error.userMessage || '구독자 목록을 불러오는데 실패했습니다.')
+    }
+  },
+
+  /**
+   * 구독자 삭제 (관리자 전용)
+   * @param {number} subscriberId - 구독자 ID
+   */
+  async deleteSubscriber(subscriberId) {
+    try {
+      const response = await apiClient.delete(`/email-subscriptions/${subscriberId}`)
+      return response.data
+    } catch (error) {
+      throw new Error(error.userMessage || '구독자 삭제에 실패했습니다.')
+    }
+  },
+
+  /**
+   * 구독 상태 변경 (관리자 전용)
+   * @param {number} subscriberId - 구독자 ID
+   * @param {boolean} isActive - 활성화 상태
+   */
+  async updateSubscriberStatus(subscriberId, isActive) {
+    try {
+      const response = await apiClient.patch(`/email-subscriptions/${subscriberId}/status`, { isActive })
+      return response.data
+    } catch (error) {
+      throw new Error(error.userMessage || '구독 상태 변경에 실패했습니다.')
+    }
+  },
+
+  /**
+   * 이벤트 요청 상태 업데이트 (관리자 전용)
+   * @param {number} requestId - 요청 ID
+   * @param {string} status - 상태 (APPROVED, REJECTED)
+   */
+  async updateRequestStatus(requestId, status) {
+    try {
+      const response = await apiClient.put(`/event-requests/admin/${requestId}/status?status=${status}`)
+      return response.data
+    } catch (error) {
+      throw new Error(error.userMessage || '요청 상태 업데이트에 실패했습니다.')
+    }
+  },
+
   /**
    * 이메일 인증 코드 전송
    */
@@ -524,6 +579,8 @@ export const eventRequestAPI = {
 
   /**
    * 이메일 인증 확인
+   * @param {string} email - 이메일
+   * @param {string} code - 인증 코드
    */
   async verifyEmail(email, code) {
     try {
@@ -539,7 +596,6 @@ export const eventRequestAPI = {
  * 이메일 구독 관련 API
  */
 export const emailSubscriptionAPI = {
-
   /**
    * 이메일 구독 신청
    * @param {Object} subscriptionData - 구독 데이터
@@ -575,6 +631,57 @@ export const emailSubscriptionAPI = {
       return response.data
     } catch (error) {
       throw new Error(error.userMessage || '구독자 목록을 불러오는데 실패했습니다.')
+    }
+  },
+
+  /**
+   * 구독자 삭제 (관리자 전용)
+   * @param {number} subscriberId - 구독자 ID
+   */
+  async deleteSubscriber(subscriberId) {
+    try {
+      const response = await apiClient.delete(`/email-subscriptions/${subscriberId}`)
+      return response.data
+    } catch (error) {
+      throw new Error(error.userMessage || '구독자 삭제에 실패했습니다.')
+    }
+  },
+
+  /**
+   * 구독 상태 변경 (관리자 전용)
+   * @param {number} subscriberId - 구독자 ID
+   * @param {boolean} isActive - 활성화 상태
+   */
+  async updateSubscriberStatus(subscriberId, isActive) {
+    try {
+      const response = await apiClient.patch(`/email-subscriptions/${subscriberId}/status`, { isActive })
+      return response.data
+    } catch (error) {
+      throw new Error(error.userMessage || '구독 상태 변경에 실패했습니다.')
+    }
+  },
+
+  /**
+   * 활성 구독자 목록 조회 (관리자 전용)
+   */
+  async getActiveSubscribers() {
+    try {
+      const response = await apiClient.get('/email-subscriptions/active')
+      return response.data
+    } catch (error) {
+      throw new Error(error.userMessage || '활성 구독자 목록을 불러오는데 실패했습니다.')
+    }
+  },
+
+  /**
+   * 구독자 통계 조회 (관리자 전용)
+   */
+  async getSubscriptionStats() {
+    try {
+      const response = await apiClient.get('/email-subscriptions/stats')
+      return response.data
+    } catch (error) {
+      throw new Error(error.userMessage || '구독자 통계를 불러오는데 실패했습니다.')
     }
   }
 }
