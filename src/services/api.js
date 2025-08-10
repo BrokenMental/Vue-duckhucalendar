@@ -409,6 +409,44 @@ export const scheduleAPI = {
   },
 
   /**
+   * 일정 통계 조회 (관리자 전용)
+   */
+  async getScheduleStats() {
+    try {
+      const response = await apiClient.get('/schedules/stats')
+      return response.data
+    } catch (error) {
+      throw new Error(error.userMessage || '일정 통계를 불러오는데 실패했습니다.')
+    }
+  },
+
+  /**
+   * 인기 이벤트 목록 조회
+   * @param {number} limit - 최대 개수
+   */
+  async getPopularSchedules(limit = 10) {
+    try {
+      const response = await apiClient.get(`/schedules/popular?limit=${limit}`)
+      return response.data
+    } catch (error) {
+      throw new Error(error.userMessage || '인기 이벤트를 불러오는데 실패했습니다.')
+    }
+  },
+
+  /**
+   * 최근 추가된 이벤트 조회
+   * @param {number} limit - 최대 개수
+   */
+  async getRecentSchedules(limit = 10) {
+    try {
+      const response = await apiClient.get(`/schedules/recent?limit=${limit}`)
+      return response.data
+    } catch (error) {
+      throw new Error(error.userMessage || '최근 이벤트를 불러오는데 실패했습니다.')
+    }
+  },
+
+  /**
    * 조회수 증가
    * @param {number} id - 일정 ID
    */
@@ -417,10 +455,9 @@ export const scheduleAPI = {
       const response = await apiClient.post(`/schedules/${id}/view`)
       return response.data
     } catch (error) {
-      // 조회수 증가 실패는 사용자에게 보여주지 않음
-      console.warn('조회수 증가 실패:', error)
+      throw new Error(error.userMessage || '조회수 증가에 실패했습니다.')
     }
-  }
+  },
 }
 
 /**

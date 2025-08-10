@@ -84,7 +84,7 @@ const router = createRouter({
  * 전역 네비게이션 가드
  * 페이지 이동 전에 실행되는 함수
  */
-router.beforeEach(async (to, from, next) => {
+router.beforeEach((to, from, next) => {
   // 페이지 제목 설정
   if (to.meta && to.meta.title) {
     document.title = `${to.meta.title} - Vue 이벤트 캘린더`
@@ -99,43 +99,32 @@ router.beforeEach(async (to, from, next) => {
     if (!adminToken) {
       console.log('관리자 인증이 필요합니다.')
 
-      // 새 탭으로 관리자 로그인 페이지 열기
-      const loginWindow = window.open('/admin-login', '_blank', 'width=500,height=600,scrollbars=yes,resizable=yes')
+      // 관리자 로그인 페이지로 리다이렉트
+      alert('관리자 인증이 필요합니다. 로그인 페이지로 이동합니다.')
+      next('/admin-login')
+    } else {
+      // 토큰이 있으면 인증 확인
+      import('@/services/api.js').then(module => {
+        const { adminAPI } = module
 
-      // 로그인 완료 감지를 위한 이벤트 리스너 (옵션)
-      if (loginWindow) {
-        const checkClosed = setInterval(() => {
-          if (loginWindow.closed) {
-            clearInterval(checkClosed)
-            // 로그인 창이 닫히면 토큰 다시 확인
-            const newToken = sessionStorage.getItem('admin-token')
-            if (newToken) {
-              next() // 토큰이 있으면 페이지 진행
-            } else {
-              next('/') // 토큰이 없으면 홈으로
-            }
-          }
-        }, 1000)
-      }
-
-      return // next()를 호출하지 않음으로써 네비게이션 중단
-    }
-
-    try {
-      const { adminAPI } = await import('@/services/api.js')
-      await adminAPI.checkAuth()
-      console.log('관리자 인증 성공')
-      next()
-    } catch (error) {
-      console.error('관리자 인증 실패:', error)
-      sessionStorage.removeItem('admin-token')
-      alert('관리자 인증이 만료되었습니다. 다시 로그인해주세요.')
-
-      // 새 탭으로 로그인 페이지 열기
-      window.open('/admin-login', '_blank', 'width=500,height=600')
-      next('/')
+        adminAPI.checkAuth()
+          .then(() => {
+            console.log('관리자 인증 성공')
+            next() // 인증 성공시 진행
+          })
+          .catch(error => {
+            console.error('관리자 인증 실패:', error)
+            sessionStorage.removeItem('admin-token')
+            alert('관리자 인증이 만료되었습니다. 다시 로그인해주세요.')
+            next('/admin-login') // 로그인 페이지로 리다이렉트
+          })
+      }).catch(error => {
+        console.error('API 모듈 로드 실패:', error)
+        next(false) // 네비게이션 취소
+      })
     }
   } else {
+    // 인증이 필요없는 페이지는 바로 진행
     next()
   }
 })

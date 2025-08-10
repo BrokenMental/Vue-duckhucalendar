@@ -305,13 +305,27 @@ export default {
     async loadDashboardData() {
       try {
         // 통계 데이터 로딩
-        this.stats = await scheduleAPI.getScheduleStats()
+        const statsResponse = await scheduleAPI.getScheduleStats()
+        this.stats = statsResponse
 
         // 이벤트 목록 로딩
-        const response = await scheduleAPI.getAllSchedules()
-        this.events = response.schedules || response || []
+        const eventsResponse = await scheduleAPI.getAllSchedules()
+        this.events = eventsResponse.schedules || eventsResponse || []
+
+        console.log('✅ 대시보드 데이터 로딩 완료:', {
+          stats: this.stats,
+          events: this.events.length
+        })
       } catch (error) {
-        console.error('대시보드 데이터 로딩 실패:', error)
+        console.error('❌ 대시보드 데이터 로딩 실패:', error)
+        // 에러가 발생해도 빈 데이터로 표시
+        this.stats = {
+          totalSchedules: 0,
+          featuredSchedules: 0,
+          totalViews: 0,
+          todaySchedules: 0
+        }
+        this.events = []
       }
     },
 
