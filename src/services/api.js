@@ -17,10 +17,13 @@ apiClient.interceptors.request.use(
   (config) => {
     console.log(`🚀 API 요청: ${config.method?.toUpperCase()} ${config.url}`)
 
-    // 세션 스토리지 사용으로 변경 (보안상 더 안전)
+    // 세션 스토리지에서 관리자 토큰 가져오기
     const adminToken = sessionStorage.getItem('admin-token')
+
+    // 토큰이 있으면 Authorization 헤더에 추가
     if (adminToken) {
       config.headers.Authorization = `Bearer ${adminToken}`
+      console.log('🔐 토큰 추가됨')
     }
 
     return config
@@ -725,6 +728,13 @@ export const adminAPI = {
         email,
         tempPassword: password
       })
+
+      // 토큰을 세션 스토리지에 저장
+      if (response.data.token) {
+        sessionStorage.setItem('admin-token', response.data.token)
+        console.log('✅ 토큰 저장 완료')
+      }
+
       return response.data
     } catch (error) {
       throw new Error(error.response?.data?.message || '로그인에 실패했습니다.')
@@ -747,8 +757,11 @@ export const adminAPI = {
         }
       })
       return response.data
-    // eslint-disable-next-line no-unused-vars
     } catch (error) {
+      // 401 에러면 토큰 삭제
+      if (error.response?.status === 401) {
+        sessionStorage.removeItem('admin-token')
+      }
       throw new Error('토큰 검증에 실패했습니다.')
     }
   },
@@ -758,37 +771,14 @@ export const adminAPI = {
    */
   async logout() {
     try {
+      // 서버에 로그아웃 요청 (선택사항)
       await apiClient.post('/admin/logout')
     } catch (error) {
       console.warn('로그아웃 API 호출 실패:', error)
     } finally {
-      //토큰 제거
+      // 토큰 제거
       sessionStorage.removeItem('admin-token')
-    }
-  },
-
-  /**
-   * 관리자 목록 조회 (슈퍼 관리자 전용)
-   */
-  async getAdmins() {
-    try {
-      const response = await apiClient.get('/admin/admins')
-      return response.data
-    } catch (error) {
-      throw new Error(error.userMessage || '관리자 목록을 불러오는데 실패했습니다.')
-    }
-  },
-
-  /**
-   * 관리자 추가 (슈퍼 관리자 전용)
-   * @param {Object} adminData - 관리자 데이터
-   */
-  async addAdmin(adminData) {
-    try {
-      const response = await apiClient.post('/admin/admins', adminData)
-      return response.data
-    } catch (error) {
-      throw new Error(error.userMessage || '관리자 추가에 실패했습니다.')
+      console.log('✅ 로그아웃 완료')
     }
   }
 }

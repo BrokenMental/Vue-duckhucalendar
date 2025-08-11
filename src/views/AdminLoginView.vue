@@ -101,7 +101,7 @@ export default {
         // 토큰 저장
         sessionStorage.setItem('admin-token', response.token)
 
-        alert('로그인 성공! 관리자 페이지로 이동합니다.')
+        //alert('로그인 성공! 관리자 페이지로 이동합니다.')
 
         // 원래 창을 관리자 페이지로 이동 후 창 닫기
         if (window.opener) {

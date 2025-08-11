@@ -100,7 +100,7 @@ router.beforeEach((to, from, next) => {
       console.log('관리자 인증이 필요합니다.')
 
       // 관리자 로그인 페이지로 리다이렉트
-      alert('관리자 인증이 필요합니다. 로그인 페이지로 이동합니다.')
+      //alert('관리자 인증이 필요합니다. 로그인 페이지로 이동합니다.')
       next('/admin-login')
     } else {
       // 토큰이 있으면 인증 확인
