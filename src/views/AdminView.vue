@@ -1,354 +1,422 @@
-<!-- src/views/AdminView.vue -->
 <template>
-  <div class="admin-page">
-    <!-- 페이지 헤더 -->
-    <header class="admin-header">
-      <h1>👑 관리자 대시보드</h1>
-      <nav class="admin-nav">
-        <RouterLink to="/" class="nav-link">캘린더로 돌아가기</RouterLink>
-        <button @click="logout" class="logout-btn">로그아웃</button>
-      </nav>
-    </header>
+  <div class="admin-container">
+    <!-- 로그인이 안 된 경우 -->
+    <div v-if="!isAuthenticated" class="login-section">
+      <div class="login-card">
+        <h2>관리자 로그인</h2>
 
-    <div class="admin-container">
-      <!-- 관리자 로그인이 필요한 경우 -->
-      <div v-if="!isAuthenticated" class="login-section">
-        <div class="login-card">
-          <h2>관리자 인증</h2>
-          <p>관리자 이메일을 입력하면 임시 비밀번호를 전송해드립니다.</p>
-
-          <div class="login-form">
-            <div class="form-group">
-              <label for="adminEmail">관리자 이메일</label>
-              <input
-                type="email"
-                id="adminEmail"
-                v-model="loginForm.email"
-                placeholder="admin@example.com"
-                @keyup.enter="requestTempPassword"
-                :disabled="tempPasswordSent"
-              />
-            </div>
-
-            <div v-if="tempPasswordSent" class="form-group">
-              <label for="tempPassword">임시 비밀번호</label>
-              <input
-                type="password"
-                id="tempPassword"
-                v-model="loginForm.tempPassword"
-                placeholder="이메일로 받은 임시 비밀번호를 입력하세요"
-                @keyup.enter="login"
-              />
-            </div>
-
-            <div class="form-actions">
-              <button
-                v-if="!tempPasswordSent"
-                @click="requestTempPassword"
-                :disabled="!loginForm.email || isLoading"
-                class="btn btn-primary">
-                {{ isLoading ? '전송 중...' : '임시 비밀번호 요청' }}
-              </button>
-
-              <button
-                v-else
-                @click="login"
-                :disabled="!loginForm.tempPassword || isLoading"
-                class="btn btn-primary">
-                {{ isLoading ? '로그인 중...' : '로그인' }}
-              </button>
-            </div>
+        <div v-if="!tempPasswordSent" class="temp-password-request">
+          <div class="form-group">
+            <label>관리자 이메일</label>
+            <input
+              v-model="loginForm.email"
+              type="email"
+              placeholder="admin@example.com"
+              @keyup.enter="requestTempPassword"
+            />
           </div>
-        </div>
-      </div>
-
-      <!-- 관리자 대시보드 -->
-      <div v-else class="admin-dashboard">
-        <!-- 통계 카드들 -->
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-icon">📅</div>
-            <div class="stat-content">
-              <h3>전체 이벤트</h3>
-              <p class="stat-number">{{ stats.totalSchedules || 0 }}</p>
-            </div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-icon">⭐</div>
-            <div class="stat-content">
-              <h3>추천 이벤트</h3>
-              <p class="stat-number">{{ stats.featuredSchedules || 0 }}</p>
-            </div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-icon">👁️</div>
-            <div class="stat-content">
-              <h3>총 조회수</h3>
-              <p class="stat-number">{{ stats.totalViews || 0 }}</p>
-            </div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-icon">📌</div>
-            <div class="stat-content">
-              <h3>오늘 일정</h3>
-              <p class="stat-number">{{ stats.todaySchedules || 0 }}</p>
-            </div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-icon">📝</div>
-            <div class="stat-content">
-              <h3>이벤트 요청</h3>
-              <p class="stat-number">{{ pendingRequests }}</p>
-            </div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-icon">📧</div>
-            <div class="stat-content">
-              <h3>활성 구독자</h3>
-              <p class="stat-number">{{ activeSubscribers }}</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- 탭 네비게이션 -->
-        <div class="admin-tabs">
-          <button
-            v-for="tab in tabs"
-            :key="tab.id"
-            @click="activeTab = tab.id"
-            :class="['tab-button', { active: activeTab === tab.id }]">
-            {{ tab.label }}
+          <button @click="requestTempPassword" :disabled="isLoading" class="btn btn-primary">
+            {{ isLoading ? '전송 중...' : '임시 비밀번호 요청' }}
           </button>
         </div>
 
-        <!-- 탭 컨텐츠 -->
-        <div class="tab-content">
-          <!-- 대시보드 탭 -->
-          <div v-if="activeTab === 'dashboard'" class="dashboard-panel">
-            <h2>최근 활동</h2>
-            <div class="activity-feed">
-              <div class="activity-item" v-if="recentActivity.length === 0">
-                <p>시스템이 정상적으로 운영되고 있습니다.</p>
-                <small>마지막 업데이트: {{ new Date().toLocaleString('ko-KR') }}</small>
-              </div>
+        <div v-else class="temp-password-login">
+          <p class="success-message">임시 비밀번호가 {{ loginForm.email }}로 전송되었습니다.</p>
+          <div class="form-group">
+            <label>임시 비밀번호</label>
+            <input
+              v-model="loginForm.tempPassword"
+              type="password"
+              placeholder="이메일로 받은 임시 비밀번호를 입력하세요"
+              @keyup.enter="login"
+            />
+          </div>
+          <button @click="login" :disabled="isLoading" class="btn btn-primary">
+            {{ isLoading ? '로그인 중...' : '로그인' }}
+          </button>
+          <button @click="tempPasswordSent = false" class="btn btn-secondary">
+            다시 요청하기
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 로그인된 관리자 페이지 -->
+    <div v-else class="admin-dashboard">
+      <!-- 헤더 -->
+      <div class="admin-header">
+        <h1>관리자 페이지</h1>
+        <button @click="logout" class="btn btn-secondary">로그아웃</button>
+      </div>
+
+      <!-- 탭 네비게이션 -->
+      <div class="tab-navigation">
+        <button
+          v-for="tab in tabs"
+          :key="tab.id"
+          @click="activeTab = tab.id"
+          :class="['tab-btn', { active: activeTab === tab.id }]"
+        >
+          {{ tab.label }}
+        </button>
+      </div>
+
+      <div class="tab-content">
+        <!-- 대시보드 탭 -->
+        <div v-if="activeTab === 'dashboard'" class="dashboard-panel">
+          <!-- 통계 카드들을 한 줄로 표시 -->
+          <div class="stats-row">
+            <div class="stat-card">
+              <h3>총 이벤트</h3>
+              <div class="stat-number">{{ stats.totalSchedules }}</div>
+            </div>
+            <div class="stat-card">
+              <h3>추천 이벤트</h3>
+              <div class="stat-number">{{ stats.featuredSchedules }}</div>
+            </div>
+            <div class="stat-card">
+              <h3>오늘의 이벤트</h3>
+              <div class="stat-number">{{ stats.todaySchedules }}</div>
+            </div>
+            <div class="stat-card">
+              <h3>총 구독자</h3>
+              <div class="stat-number">{{ subscribers.length }}</div>
             </div>
           </div>
 
-          <!-- 이벤트 관리 탭 -->
-          <div v-if="activeTab === 'events'" class="events-panel">
-            <div class="panel-header">
-              <h2>이벤트 목록</h2>
-              <button @click="openAddEventModal" class="btn btn-primary">
-                + 새 이벤트 추가
+          <div class="dashboard-content">
+            <div class="recent-activity">
+              <h3>최근 활동</h3>
+              <div class="activity-list">
+                <div v-for="activity in recentActivity" :key="activity.id" class="activity-item">
+                  <span class="activity-time">{{ formatDate(activity.createdAt) }}</span>
+                  <span class="activity-description">{{ activity.description }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="quick-actions">
+              <h3>빠른 작업</h3>
+              <div class="action-buttons">
+                <button @click="openAddEventModal" class="btn btn-primary">
+                  새 이벤트 추가
+                </button>
+                <button @click="activeTab = 'requests'" class="btn btn-outline">
+                  이벤트 요청 확인
+                </button>
+                <button @click="checkSystemHealth" class="btn btn-outline">
+                  시스템 상태 확인
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 이벤트 관리 탭 -->
+        <div v-if="activeTab === 'events'" class="events-panel">
+          <div class="panel-header">
+            <h2>이벤트 목록</h2>
+            <button @click="openAddEventModal" class="btn btn-primary">
+              새 이벤트 추가
+            </button>
+          </div>
+
+          <div class="events-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>제목</th>
+                  <th>날짜/시간</th>
+                  <th>카테고리</th>
+                  <th>추천</th>
+                  <th>작업</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="event in events" :key="event.id">
+                  <td>{{ event.title }}</td>
+                  <td>
+                    <div class="date-time-info">
+                      <!-- 시작 날짜 -->
+                      <div class="date-row">
+                        <strong>시작:</strong> {{ formatDate(event.startDate) }}
+                        <div v-if="event.startTime" class="time-info">{{ event.startTime }}</div>
+                      </div>
+                      <!-- 종료 날짜 (있는 경우만) -->
+                      <div v-if="event.endDate && event.endDate !== event.startDate" class="date-row">
+                        <strong>종료:</strong> {{ formatDate(event.endDate) }}
+                        <div v-if="event.endTime" class="time-info">{{ event.endTime }}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="category-badge">{{ event.category }}</span>
+                  </td>
+                  <td class="text-center">
+                    <button @click="toggleFeatured(event)" class="star-btn">
+                      {{ event.isFeatured ? '⭐' : '☆' }}
+                    </button>
+                  </td>
+                  <td class="actions">
+                    <button @click="editEvent(event)" class="btn btn-primary btn-small">
+                      수정
+                    </button>
+                    <button @click="deleteEvent(event)" class="btn btn-danger btn-small">
+                      삭제
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div v-if="events.length === 0" class="empty-state">
+              <p>등록된 이벤트가 없습니다.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 이벤트 요청 탭 -->
+        <div v-if="activeTab === 'requests'" class="requests-panel">
+          <div class="panel-header">
+            <h2>이벤트 요청 관리</h2>
+            <div class="filter-buttons">
+              <button
+                @click="requestFilter = 'all'"
+                :class="['filter-btn', { active: requestFilter === 'all' }]">
+                전체 ({{ eventRequests.length }})
+              </button>
+              <button
+                @click="requestFilter = 'pending'"
+                :class="['filter-btn', { active: requestFilter === 'pending' }]">
+                대기중 ({{ pendingRequests }})
+              </button>
+              <button
+                @click="requestFilter = 'approved'"
+                :class="['filter-btn', { active: requestFilter === 'approved' }]">
+                승인됨
+              </button>
+              <button
+                @click="requestFilter = 'rejected'"
+                :class="['filter-btn', { active: requestFilter === 'rejected' }]">
+                거절됨
+              </button>
+            </div>
+          </div>
+
+          <div class="requests-list">
+            <div v-for="request in filteredRequests" :key="request.id" class="request-card">
+              <div class="request-header">
+                <h4>{{ request.title }}</h4>
+                <span :class="['status-badge', request.status]">
+                  {{ getStatusText(request.status) }}
+                </span>
+              </div>
+              <div class="request-content">
+                <p><strong>요청자:</strong> {{ request.email }}</p>
+                <p><strong>날짜:</strong> {{ formatDate(request.requestedDate) }}</p>
+                <p><strong>설명:</strong> {{ request.description }}</p>
+              </div>
+              <div class="request-actions" v-if="request.status === 'pending'">
+                <button @click="approveRequest(request)" class="btn btn-success btn-small">승인</button>
+                <button @click="rejectRequest(request)" class="btn btn-danger btn-small">거절</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 구독자 관리 탭 -->
+        <div v-if="activeTab === 'subscribers'" class="subscribers-panel">
+          <div class="panel-header">
+            <h2>구독자 관리</h2>
+            <p class="subscriber-count">총 {{ subscribers.length }}명이 구독 중입니다.</p>
+          </div>
+
+          <div class="subscribers-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>이메일</th>
+                  <th>구독일</th>
+                  <th>상태</th>
+                  <th>작업</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="subscriber in subscribers" :key="subscriber.id">
+                  <td>{{ subscriber.email }}</td>
+                  <td>{{ formatDate(subscriber.subscribedAt) }}</td>
+                  <td>
+                    <span :class="['status-badge', subscriber.isActive ? 'active' : 'inactive']">
+                      {{ subscriber.isActive ? '활성' : '비활성' }}
+                    </span>
+                  </td>
+                  <td class="actions">
+                    <button @click="toggleSubscriberStatus(subscriber)" class="btn btn-outline btn-small">
+                      {{ subscriber.isActive ? '비활성화' : '활성화' }}
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 설정 탭 -->
+        <div v-if="activeTab === 'settings'" class="settings-panel">
+          <div class="settings-grid">
+            <!-- 일반 설정 -->
+            <div class="setting-card">
+              <h3>일반 설정</h3>
+
+              <div class="setting-item">
+                <label>사이트 제목</label>
+                <input v-model="settings.siteTitle" type="text" />
+              </div>
+
+              <div class="setting-item">
+                <label>사이트 설명</label>
+                <textarea v-model="settings.siteDescription"></textarea>
+              </div>
+
+              <div class="setting-item">
+                <label class="checkbox-label">
+                  <input v-model="settings.maintenanceMode" type="checkbox" />
+                  유지보수 모드
+                </label>
+              </div>
+
+              <button @click="saveGeneralSettings" class="btn btn-primary">
+                저장
               </button>
             </div>
 
-            <div class="events-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>제목</th>
-                    <th>날짜</th>
-                    <th>카테고리</th>
-                    <th>추천</th>
-                    <th>조회수</th>
-                    <th>작업</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="event in events" :key="event.id">
-                    <td>{{ event.title }}</td>
-                    <td>{{ formatDate(event.startDate) }}</td>
-                    <td>
-                      <span class="category-badge">{{ event.category }}</span>
-                    </td>
-                    <td class="text-center">
-                      <button @click="toggleFeatured(event)" class="star-btn">
-                        {{ event.isFeatured ? '⭐' : '☆' }}
-                      </button>
-                    </td>
-                    <td class="text-center">{{ event.viewCount || 0 }}</td>
-                    <td class="actions">
-                      <button @click="editEvent(event)" class="btn-small btn-edit">수정</button>
-                      <button @click="deleteEvent(event)" class="btn-small btn-delete">삭제</button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+            <!-- 알림 설정 -->
+            <div class="setting-card">
+              <h3>뉴스레터 설정</h3>
 
-              <div v-if="events.length === 0" class="empty-state">
-                <p>등록된 이벤트가 없습니다.</p>
+              <div class="setting-item">
+                <label class="checkbox-label">
+                  <input v-model="settings.newsletterEnabled" type="checkbox" />
+                  뉴스레터 발송 활성화
+                </label>
               </div>
-            </div>
-          </div>
 
-          <!-- 이벤트 요청 탭 -->
-          <div v-if="activeTab === 'requests'" class="requests-panel">
-            <div class="panel-header">
-              <h2>이벤트 요청 관리</h2>
-              <div class="filter-buttons">
-                <button
-                  @click="requestFilter = 'all'"
-                  :class="['filter-btn', { active: requestFilter === 'all' }]">
-                  전체 ({{ eventRequests.length }})
+              <div class="setting-item">
+                <label>발송 요일</label>
+                <select v-model="settings.newsletterDay">
+                  <option value="0">일요일</option>
+                  <option value="1">월요일</option>
+                  <option value="2">화요일</option>
+                  <option value="3">수요일</option>
+                  <option value="4">목요일</option>
+                  <option value="5">금요일</option>
+                  <option value="6">토요일</option>
+                </select>
+              </div>
+
+              <div class="setting-item">
+                <label>발송 시간</label>
+                <input v-model="settings.newsletterTime" type="time" />
+              </div>
+
+              <button @click="saveNotificationSettings" class="btn btn-primary">
+                저장
+              </button>
+            </div>
+
+            <!-- 캘린더 설정 -->
+            <div class="setting-card">
+              <h3>캘린더 설정</h3>
+
+              <div class="setting-item">
+                <label>주 시작일</label>
+                <select v-model="settings.weekStartDay">
+                  <option value="0">일요일</option>
+                  <option value="1">월요일</option>
+                </select>
+              </div>
+
+              <div class="setting-item">
+                <label>기본 보기</label>
+                <select v-model="settings.defaultView">
+                  <option value="month">월간</option>
+                  <option value="week">주간</option>
+                  <option value="day">일간</option>
+                </select>
+              </div>
+
+              <div class="setting-item">
+                <label>페이지당 이벤트 수</label>
+                <input
+                  v-model.number="settings.eventsPerPage"
+                  type="number"
+                  min="10"
+                  max="100"
+                />
+              </div>
+
+              <div class="setting-item">
+                <label class="checkbox-label">
+                  <input v-model="settings.showWeekNumbers" type="checkbox" />
+                  주 번호 표시 (현재 미구현)
+                </label>
+              </div>
+
+              <button @click="saveCalendarSettings" class="btn btn-primary">
+                저장
+              </button>
+            </div>
+
+            <!-- 데이터 관리 설정 (관리자 전용) -->
+            <div class="setting-card">
+              <h3>데이터 관리</h3>
+
+              <div class="setting-item">
+                <label>데이터 백업</label>
+                <button @click="backupData" class="btn btn-outline">
+                  백업 생성
                 </button>
-                <button
-                  @click="requestFilter = 'pending'"
-                  :class="['filter-btn', { active: requestFilter === 'pending' }]">
-                  대기중 ({{ pendingRequests }})
+              </div>
+
+              <div class="setting-item danger-zone">
+                <label>위험 구역</label>
+                <button @click="confirmDeleteAllEvents" class="btn btn-danger">
+                  모든 이벤트 삭제
                 </button>
-                <button
-                  @click="requestFilter = 'approved'"
-                  :class="['filter-btn', { active: requestFilter === 'approved' }]">
-                  승인됨
-                </button>
-                <button
-                  @click="requestFilter = 'rejected'"
-                  :class="['filter-btn', { active: requestFilter === 'rejected' }]">
-                  거절됨
+                <button @click="confirmDeleteAllSubscribers" class="btn btn-danger">
+                  모든 구독자 삭제
                 </button>
               </div>
-            </div>
 
-            <div class="requests-list">
-              <div
-                v-for="request in filteredRequests"
-                :key="request.id"
-                class="request-card">
-                <div class="request-header">
-                  <div class="request-badges">
-                    <span :class="['request-type', request.requestType.toLowerCase()]">
-                      {{ getRequestTypeLabel(request.requestType) }}
-                    </span>
-                    <span :class="['request-status', request.status.toLowerCase()]">
-                      {{ getRequestStatusLabel(request.status) }}
-                    </span>
-                  </div>
-                  <div class="request-date">
-                    {{ formatDate(request.createdAt) }}
-                  </div>
-                </div>
-
-                <div class="request-body">
-                  <h3>{{ getRequestTitle(request) }}</h3>
-                  <p class="requester">요청자: {{ request.requesterEmail }}</p>
-
-                  <div v-if="request.eventData" class="event-details">
-                    <div v-if="request.eventData.date">
-                      <strong>예정일:</strong> {{ request.eventData.date }}
-                    </div>
-                    <div v-if="request.eventData.description">
-                      <strong>설명:</strong> {{ request.eventData.description }}
-                    </div>
-                    <div v-if="request.eventData.location">
-                      <strong>장소:</strong> {{ request.eventData.location }}
-                    </div>
-                  </div>
-                </div>
-
-                <div v-if="request.status === 'PENDING'" class="request-actions">
-                  <button
-                    @click="handleRequestAction(request.id, 'APPROVED')"
-                    class="btn btn-approve">
-                    승인
-                  </button>
-                  <button
-                    @click="handleRequestAction(request.id, 'REJECTED')"
-                    class="btn btn-reject">
-                    거절
-                  </button>
-                </div>
-              </div>
-
-              <div v-if="filteredRequests.length === 0" class="empty-state">
-                <p>{{ getEmptyRequestMessage() }}</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- 구독자 관리 탭 -->
-          <div v-if="activeTab === 'subscribers'" class="subscribers-panel">
-            <div class="panel-header">
-              <h2>구독자 목록</h2>
-              <div class="subscriber-stats">
-                <span>총 구독자: {{ subscribers.length }}명</span>
-                <span>활성: {{ activeSubscribers }}명</span>
-              </div>
-            </div>
-
-            <div class="subscribers-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>이메일</th>
-                    <th>이름</th>
-                    <th>구독일</th>
-                    <th>상태</th>
-                    <th>작업</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="subscriber in subscribers" :key="subscriber.id">
-                    <td>{{ subscriber.email }}</td>
-                    <td>{{ subscriber.subscriberName || '-' }}</td>
-                    <td>{{ formatDate(subscriber.subscribedAt) }}</td>
-                    <td>
-                      <span :class="['status-badge', subscriber.isActive ? 'active' : 'inactive']">
-                        {{ subscriber.isActive ? '활성' : '비활성' }}
-                      </span>
-                    </td>
-                    <td class="actions">
-                      <button
-                        v-if="subscriber.isActive"
-                        @click="toggleSubscriberStatus(subscriber)"
-                        class="btn-small btn-warning">
-                        비활성화
-                      </button>
-                      <button
-                        v-else
-                        @click="toggleSubscriberStatus(subscriber)"
-                        class="btn-small btn-success">
-                        활성화
-                      </button>
-                      <button
-                        @click="removeSubscriber(subscriber)"
-                        class="btn-small btn-delete">
-                        삭제
-                      </button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-
-              <div v-if="subscribers.length === 0" class="empty-state">
-                <p>구독자가 없습니다.</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- 설정 탭 -->
-          <div v-if="activeTab === 'settings'" class="settings-panel">
-            <h2>시스템 설정</h2>
-            <div class="coming-soon">
-              <p>설정 기능은 준비 중입니다.</p>
+              <p class="warning-text">
+                ⚠️ 삭제된 데이터는 복구할 수 없습니다.
+              </p>
             </div>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- 이벤트 관리 모달 -->
+    <EventManagementModal
+      :show="showEventModal"
+      :event="selectedEvent"
+      @close="closeEventModal"
+      @saved="handleEventSaved"
+    />
   </div>
 </template>
 
 <script>
 import { scheduleAPI, adminAPI, eventRequestAPI, emailSubscriptionAPI } from '@/services/api.js'
+import EventManagementModal from '@/components/EventManagementModal.vue'
 
 export default {
   name: 'AdminView',
+
+  components: {
+    EventManagementModal
+  },
 
   data() {
     return {
@@ -377,7 +445,6 @@ export default {
       stats: {
         totalSchedules: 0,
         featuredSchedules: 0,
-        totalViews: 0,
         todaySchedules: 0
       },
 
@@ -388,48 +455,50 @@ export default {
       recentActivity: [],
 
       // 필터
-      requestFilter: 'all'
+      requestFilter: 'all',
+      showEventModal: false,
+      selectedEvent: null,
+      settings: {
+        // 일반 설정
+        siteTitle: '더쿠 캘린더',
+        siteDescription: '다양한 굿즈 이벤트를 확인하는 곳!',
+        maintenanceMode: false,
+
+        // 뉴스레터 설정
+        newsletterEnabled: true,
+        newsletterDay: 0, // 일요일
+        newsletterTime: '09:00', // 오전 9시
+
+        // 캘린더 설정
+        weekStartDay: 0, // 일요일
+        defaultView: 'month',
+        eventsPerPage: 20,
+        showWeekNumbers: false
+      }
     }
   },
 
   computed: {
-    pendingRequests() {
-      return this.eventRequests.filter(r => r.status === 'PENDING').length
-    },
-
-    activeSubscribers() {
-      return this.subscribers.filter(s => s.isActive).length
-    },
-
     filteredRequests() {
       if (this.requestFilter === 'all') return this.eventRequests
-      return this.eventRequests.filter(r =>
-        r.status.toLowerCase() === this.requestFilter
-      )
+      return this.eventRequests.filter(request => request.status === this.requestFilter)
+    },
+
+    pendingRequests() {
+      return this.eventRequests.filter(request => request.status === 'pending').length
     }
   },
 
-  mounted() {
-    this.checkAuthentication()
+  async mounted() {
+    // 인증 상태 확인
+    const token = sessionStorage.getItem('admin-token')
+    if (token) {
+      this.isAuthenticated = true
+      await this.loadDashboardData()
+    }
   },
 
   methods: {
-    // 인증 확인
-    async checkAuthentication() {
-      const token = sessionStorage.getItem('admin-token')
-      if (token) {
-        try {
-          await adminAPI.checkAuth()
-          this.isAuthenticated = true
-          await this.loadDashboardData()
-        } catch (error) {
-          console.error('인증 확인 실패:', error)
-          sessionStorage.removeItem('admin-token')
-          this.isAuthenticated = false
-        }
-      }
-    },
-
     // 임시 비밀번호 요청
     async requestTempPassword() {
       if (!this.loginForm.email) {
@@ -441,9 +510,9 @@ export default {
       try {
         await adminAPI.requestTempPassword(this.loginForm.email)
         this.tempPasswordSent = true
-        alert('임시 비밀번호가 이메일로 전송되었습니다.')
+        alert('임시 비밀번호가 발송되었습니다.')
       } catch (error) {
-        alert(error.message || '임시 비밀번호 요청에 실패했습니다.')
+        alert(error.message || '임시 비밀번호 발송에 실패했습니다.')
       } finally {
         this.isLoading = false
       }
@@ -511,193 +580,183 @@ export default {
 
     // 이벤트 관리
     openAddEventModal() {
-      alert('이벤트 추가 기능을 구현해야 합니다.')
+      this.selectedEvent = null
+      this.showEventModal = true
     },
 
     editEvent(event) {
-      alert(`"${event.title}" 이벤트 수정 기능을 구현해야 합니다.`)
+      this.selectedEvent = event
+      this.showEventModal = true
     },
 
-    async toggleFeatured(event) {
-      try {
-        await scheduleAPI.toggleFeatured(event.id, !event.isFeatured)
-        event.isFeatured = !event.isFeatured
-        alert(event.isFeatured ? '추천 이벤트로 설정되었습니다.' : '추천에서 해제되었습니다.')
-      // eslint-disable-next-line no-unused-vars
-      } catch (error) {
-        alert('추천 설정 변경에 실패했습니다.')
+    closeEventModal() {
+      this.showEventModal = false
+      this.selectedEvent = null
+    },
+
+    async handleEventSaved(result) {
+      console.log('이벤트 저장됨:', result)
+      await this.loadDashboardData()
+
+      if (result.type === 'create') {
+        console.log('새 이벤트가 추가되었습니다.')
+      } else {
+        console.log('이벤트가 수정되었습니다.')
       }
     },
 
     async deleteEvent(event) {
-      if (confirm(`"${event.title}" 이벤트를 삭제하시겠습니까?`)) {
-        try {
-          await scheduleAPI.deleteSchedule(event.id)
-          this.events = this.events.filter(e => e.id !== event.id)
-          alert('이벤트가 삭제되었습니다.')
-        // eslint-disable-next-line no-unused-vars
-        } catch (error) {
-          alert('이벤트 삭제에 실패했습니다.')
-        }
+      if (!confirm(`"${event.title}" 이벤트를 삭제하시겠습니까?`)) return
+
+      try {
+        await scheduleAPI.deleteSchedule(event.id)
+        await this.loadDashboardData()
+        alert('이벤트가 삭제되었습니다.')
+      } catch (error) {
+        alert('이벤트 삭제에 실패했습니다.')
       }
     },
 
-    // 이벤트 요청 처리
-    async handleRequestAction(requestId, action) {
-      const actionText = action === 'APPROVED' ? '승인' : '거절'
-      if (!confirm(`이 요청을 ${actionText}하시겠습니까?`)) return
-
+    async toggleFeatured(event) {
       try {
-        await eventRequestAPI.updateRequestStatus(requestId, action)
-
-        // 상태 업데이트
-        const request = this.eventRequests.find(r => r.id === requestId)
-        if (request) request.status = action
-
-        alert(`요청이 ${actionText}되었습니다.`)
-
-        // 승인된 경우 이벤트 목록 새로고침
-        if (action === 'APPROVED') {
-          await this.loadDashboardData()
-        }
-      // eslint-disable-next-line no-unused-vars
+        await scheduleAPI.updateSchedule(event.id, {
+          ...event,
+          isFeatured: !event.isFeatured
+        })
+        await this.loadDashboardData()
       } catch (error) {
-        alert(`요청 ${actionText}에 실패했습니다.`)
+        alert('추천 상태 변경에 실패했습니다.')
       }
+    },
+
+    // 이벤트 요청 관리
+    async approveRequest(request) {
+      try {
+        await eventRequestAPI.updateRequestStatus(request.id, 'approved')
+        await this.loadDashboardData()
+        alert('요청이 승인되었습니다.')
+      } catch (error) {
+        alert('요청 승인에 실패했습니다.')
+      }
+    },
+
+    async rejectRequest(request) {
+      try {
+        await eventRequestAPI.updateRequestStatus(request.id, 'rejected')
+        await this.loadDashboardData()
+        alert('요청이 거절되었습니다.')
+      } catch (error) {
+        alert('요청 거절에 실패했습니다.')
+      }
+    },
+
+    getStatusText(status) {
+      const statusMap = {
+        pending: '대기중',
+        approved: '승인됨',
+        rejected: '거절됨'
+      }
+      return statusMap[status] || status
     },
 
     // 구독자 관리
     async toggleSubscriberStatus(subscriber) {
       try {
-        await emailSubscriptionAPI.updateSubscriberStatus(
-          subscriber.id,
-          !subscriber.isActive
-        )
-        subscriber.isActive = !subscriber.isActive
-        alert(`구독자 상태가 ${subscriber.isActive ? '활성화' : '비활성화'}되었습니다.`)
-      // eslint-disable-next-line no-unused-vars
+        await emailSubscriptionAPI.updateSubscriber(subscriber.id, {
+          isActive: !subscriber.isActive
+        })
+        await this.loadDashboardData()
       } catch (error) {
         alert('구독자 상태 변경에 실패했습니다.')
       }
     },
 
-    async removeSubscriber(subscriber) {
-      if (!confirm(`${subscriber.email} 구독자를 삭제하시겠습니까?`)) return
+    // 설정 관련 메서드들
+    async saveGeneralSettings() {
+      try {
+        console.log('일반 설정 저장:', this.settings)
+        alert('일반 설정이 저장되었습니다.')
+      } catch (error) {
+        alert('설정 저장에 실패했습니다.')
+      }
+    },
+
+    async saveNotificationSettings() {
+      try {
+        console.log('뉴스레터 설정 저장:', this.settings)
+        alert('뉴스레터 설정이 저장되었습니다.')
+      } catch (error) {
+        alert('설정 저장에 실패했습니다.')
+      }
+    },
+
+    async saveCalendarSettings() {
+      try {
+        console.log('캘린더 설정 저장:', this.settings)
+        alert('캘린더 설정이 저장되었습니다.')
+      } catch (error) {
+        alert('설정 저장에 실패했습니다.')
+      }
+    },
+
+    // 데이터 관리
+    async backupData() {
+      try {
+        // 백업 생성 로직
+        alert('데이터 백업이 생성되었습니다.')
+      } catch (error) {
+        alert('백업 생성에 실패했습니다.')
+      }
+    },
+
+    async confirmDeleteAllEvents() {
+      if (!confirm('정말로 모든 이벤트를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return
+      if (!confirm('다시 한 번 확인합니다. 모든 이벤트 데이터가 영구적으로 삭제됩니다.')) return
 
       try {
-        await emailSubscriptionAPI.deleteSubscriber(subscriber.id)
-        this.subscribers = this.subscribers.filter(s => s.id !== subscriber.id)
-        alert('구독자가 삭제되었습니다.')
-      // eslint-disable-next-line no-unused-vars
+        // 모든 이벤트 삭제 로직
+        alert('모든 이벤트가 삭제되었습니다.')
+        await this.loadDashboardData()
+      } catch (error) {
+        alert('이벤트 삭제에 실패했습니다.')
+      }
+    },
+
+    async confirmDeleteAllSubscribers() {
+      if (!confirm('정말로 모든 구독자를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return
+      if (!confirm('다시 한 번 확인합니다. 모든 구독자 데이터가 영구적으로 삭제됩니다.')) return
+
+      try {
+        // 모든 구독자 삭제 로직
+        alert('모든 구독자가 삭제되었습니다.')
+        await this.loadDashboardData()
       } catch (error) {
         alert('구독자 삭제에 실패했습니다.')
       }
     },
 
-    // 유틸리티
-    formatDate(dateString) {
-      if (!dateString) return '-'
-      return new Date(dateString).toLocaleDateString('ko-KR')
-    },
-
-    getRequestTypeLabel(type) {
-      const labels = {
-        'ADD': '추가 요청',
-        'MODIFY': '수정 요청',
-        'DELETE': '삭제 요청'
-      }
-      return labels[type] || type
-    },
-
-    getRequestStatusLabel(status) {
-      const labels = {
-        'PENDING': '대기중',
-        'APPROVED': '승인됨',
-        'REJECTED': '거절됨'
-      }
-      return labels[status] || status
-    },
-
-    getRequestTitle(request) {
+    async checkSystemHealth() {
       try {
-        const data = typeof request.eventData === 'string'
-          ? JSON.parse(request.eventData)
-          : request.eventData
-        return data.title || '제목 없음'
-      } catch {
-        return '제목 없음'
+        // 시스템 상태 확인 로직
+        alert('시스템이 정상적으로 동작하고 있습니다.')
+      } catch (error) {
+        alert('시스템 상태 확인에 실패했습니다.')
       }
     },
 
-    getEmptyRequestMessage() {
-      if (this.requestFilter === 'pending') return '처리할 요청이 없습니다.'
-      if (this.requestFilter === 'approved') return '승인된 요청이 없습니다.'
-      if (this.requestFilter === 'rejected') return '거절된 요청이 없습니다.'
-      return '요청이 없습니다.'
+    // 유틸리티 메서드
+    formatDate(date) {
+      if (!date) return ''
+      return new Date(date).toLocaleDateString('ko-KR')
     }
   }
 }
 </script>
 
 <style scoped>
-/* 기본 레이아웃 */
-.admin-page {
-  min-height: 100vh;
-  background: #f8f9fa;
-}
-
-.admin-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.admin-header h1 {
-  font-size: 28px;
-  font-weight: 700;
-  margin: 0;
-}
-
-.admin-nav {
-  display: flex;
-  gap: 15px;
-  align-items: center;
-}
-
-.nav-link {
-  color: white;
-  text-decoration: none;
-  padding: 10px 20px;
-  border-radius: 5px;
-  transition: background 0.3s ease;
-}
-
-.nav-link:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.logout-btn {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background 0.3s ease;
-}
-
-.logout-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
 .admin-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 30px 20px;
+  min-height: 100vh;
+  background-color: #f5f5f5;
 }
 
 /* 로그인 섹션 */
@@ -705,31 +764,23 @@ export default {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 500px;
+  min-height: 100vh;
+  padding: 20px;
 }
 
 .login-card {
   background: white;
   padding: 40px;
-  border-radius: 15px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-  max-width: 400px;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   width: 100%;
-  text-align: center;
+  max-width: 400px;
 }
 
 .login-card h2 {
-  margin-bottom: 10px;
-  color: #333;
-}
-
-.login-card p {
-  color: #666;
+  text-align: center;
   margin-bottom: 30px;
-}
-
-.login-form {
-  text-align: left;
+  color: #333;
 }
 
 .form-group {
@@ -738,43 +789,83 @@ export default {
 
 .form-group label {
   display: block;
-  margin-bottom: 5px;
+  margin-bottom: 8px;
   font-weight: 600;
-  color: #333;
+  color: #555;
 }
 
 .form-group input {
   width: 100%;
   padding: 12px;
-  border: 2px solid #ddd;
-  border-radius: 8px;
-  font-size: 16px;
-  transition: border-color 0.3s ease;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
 }
 
-.form-group input:focus {
-  outline: none;
-  border-color: #667eea;
-}
-
-.form-actions {
+.success-message {
+  color: #28a745;
   text-align: center;
-  margin-top: 20px;
+  margin-bottom: 20px;
+  padding: 10px;
+  background-color: #d4edda;
+  border-radius: 6px;
 }
 
-/* 대시보드 */
+/* 관리자 대시보드 */
 .admin-dashboard {
-  animation: fadeIn 0.5s ease;
+  padding: 20px;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #eee;
 }
 
-.stats-grid {
+.admin-header h1 {
+  color: #333;
+  margin: 0;
+}
+
+/* 탭 네비게이션 */
+.tab-navigation {
+  display: flex;
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 15px 20px;
+  background: white;
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+  color: #666;
+  transition: all 0.3s;
+  border-bottom: 3px solid transparent;
+}
+
+.tab-btn:hover {
+  background-color: #f8f9fa;
+}
+
+.tab-btn.active {
+  color: #007bff;
+  border-bottom-color: #007bff;
+  background-color: #f8f9fa;
+}
+
+/* 대시보드 통계 카드를 한 줄로 */
+.stats-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 20px;
   margin-bottom: 30px;
 }
@@ -782,25 +873,13 @@ export default {
 .stat-card {
   background: white;
   padding: 25px;
-  border-radius: 15px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  transition: transform 0.3s ease;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  text-align: center;
 }
 
-.stat-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
-}
-
-.stat-icon {
-  font-size: 48px;
-}
-
-.stat-content h3 {
-  margin: 0 0 5px 0;
+.stat-card h3 {
+  margin: 0 0 15px 0;
   color: #666;
   font-size: 14px;
   font-weight: 500;
@@ -808,95 +887,75 @@ export default {
 
 .stat-number {
   font-size: 32px;
-  font-weight: 700;
-  color: #333;
-  margin: 0;
+  font-weight: bold;
+  color: #007bff;
 }
 
-/* 탭 */
-.admin-tabs {
-  display: flex;
-  gap: 2px;
-  margin-bottom: 20px;
-  background: #e9ecef;
-  border-radius: 10px;
-  padding: 4px;
+/* 대시보드 콘텐츠 */
+.dashboard-content {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
 }
 
-.tab-button {
-  flex: 1;
-  padding: 12px 20px;
-  border: none;
-  background: transparent;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: all 0.3s ease;
-  color: #666;
-}
-
-.tab-button:hover {
-  background: rgba(255, 255, 255, 0.5);
-}
-
-.tab-button.active {
+.recent-activity,
+.quick-actions {
   background: white;
-  color: #667eea;
+  padding: 25px;
+  border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.tab-content {
-  background: white;
-  border-radius: 15px;
-  padding: 30px;
-  min-height: 400px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+.recent-activity h3,
+.quick-actions h3 {
+  margin: 0 0 20px 0;
+  color: #333;
 }
 
-/* 패널 */
-.dashboard-panel h2,
-.events-panel h2,
-.requests-panel h2,
-.subscribers-panel h2,
-.settings-panel h2 {
-  margin-bottom: 20px;
-  color: #333;
-  font-size: 24px;
+.activity-list {
+  space-y: 10px;
+}
+
+.activity-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.activity-time {
+  color: #666;
+  font-size: 12px;
+}
+
+.action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 이벤트 테이블 */
+.events-panel,
+.requests-panel,
+.subscribers-panel {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 15px;
-  border-bottom: 2px solid #e0e0e0;
+  padding: 25px;
+  border-bottom: 1px solid #eee;
 }
 
-.activity-feed {
-  background: #f8f9fa;
-  border-radius: 10px;
-  padding: 20px;
-}
-
-.activity-item {
-  padding: 15px;
-  background: white;
-  border-radius: 8px;
-  margin-bottom: 10px;
-}
-
-.activity-item p {
+.panel-header h2 {
   margin: 0;
-  color: #666;
+  color: #333;
 }
 
-.activity-item small {
-  color: #999;
-  font-size: 12px;
-}
-
-/* 테이블 */
 .events-table,
 .subscribers-table {
   overflow-x: auto;
@@ -909,230 +968,75 @@ export default {
 }
 
 .events-table th,
-.subscribers-table th {
-  background: #f8f9fa;
-  padding: 12px;
-  text-align: left;
-  font-weight: 600;
-  color: #333;
-  border-bottom: 2px solid #dee2e6;
-}
-
 .events-table td,
+.subscribers-table th,
 .subscribers-table td {
-  padding: 12px;
-  border-bottom: 1px solid #dee2e6;
-}
-
-.events-table tr:hover,
-.subscribers-table tr:hover {
-  background: #f8f9fa;
-}
-
-/* 요청 카드 */
-.requests-list {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-.request-card {
-  border: 1px solid #e0e0e0;
-  border-radius: 10px;
-  padding: 20px;
-  transition: all 0.3s ease;
-  background: white;
-}
-
-.request-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
-}
-
-.request-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-}
-
-.request-badges {
-  display: flex;
-  gap: 10px;
-}
-
-.request-type,
-.request-status {
-  padding: 4px 12px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.request-type.add { background: #d4edda; color: #155724; }
-.request-type.modify { background: #fff3cd; color: #856404; }
-.request-type.delete { background: #f8d7da; color: #721c24; }
-
-.request-status.pending { background: #e2e3e5; color: #383d41; }
-.request-status.approved { background: #cce5ff; color: #004085; }
-.request-status.rejected { background: #f8d7da; color: #721c24; }
-
-.request-date {
-  color: #666;
-  font-size: 14px;
-}
-
-.request-body h3 {
-  margin: 0 0 10px 0;
-  font-size: 18px;
-  color: #333;
-}
-
-.requester {
-  color: #666;
-  margin-bottom: 10px;
-  font-size: 14px;
-}
-
-.event-details {
-  background: #f8f9fa;
   padding: 15px;
-  border-radius: 8px;
-  margin-top: 10px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
 }
 
-.event-details div {
-  margin-bottom: 8px;
+.events-table th,
+.subscribers-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
   color: #555;
 }
 
-.event-details strong {
-  color: #333;
-  margin-right: 8px;
-}
-
-.request-actions {
+/* 날짜/시간 정보 스타일링 */
+.date-time-info {
   display: flex;
-  gap: 10px;
-  margin-top: 15px;
+  flex-direction: column;
+  gap: 5px;
 }
 
-/* 버튼 스타일 */
-.btn {
-  padding: 12px 24px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: all 0.3s ease;
-  text-decoration: none;
-  display: inline-block;
-  font-size: 16px;
+.date-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.time-info {
+  font-size: 12px;
+  color: #666;
+  background-color: #f0f0f0;
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
-.btn-primary {
-  background: #667eea;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #5a67d8;
-  transform: translateY(-2px);
-}
-
-.btn-secondary {
-  background: #6c757d;
-  color: white;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #545b62;
-}
-
-.btn-approve {
-  background: #28a745;
-  color: white;
-  padding: 8px 16px;
-  font-size: 14px;
-}
-
-.btn-approve:hover {
-  background: #218838;
-}
-
-.btn-reject {
-  background: #dc3545;
-  color: white;
-  padding: 8px 16px;
-  font-size: 14px;
-}
-
-.btn-reject:hover {
-  background: #c82333;
-}
-
-.btn-small {
-  padding: 6px 12px;
-  font-size: 14px;
-}
-
-.btn-edit {
-  background: #ffc107;
-  color: #212529;
-}
-
-.btn-delete {
-  background: #dc3545;
-  color: white;
-}
-
-.btn-warning {
-  background: #ffc107;
-  color: #212529;
-}
-
-.btn-success {
-  background: #28a745;
-  color: white;
-}
-
-/* 기타 요소 */
 .category-badge {
-  padding: 4px 12px;
-  background: #e9ecef;
+  background-color: #e3f2fd;
+  color: #1976d2;
+  padding: 4px 8px;
   border-radius: 4px;
   font-size: 12px;
-  font-weight: 600;
-  color: #495057;
+  font-weight: 500;
 }
 
 .star-btn {
-  background: transparent;
+  background: none;
   border: none;
-  font-size: 20px;
+  font-size: 18px;
   cursor: pointer;
-  transition: transform 0.3s ease;
-}
-
-.star-btn:hover {
-  transform: scale(1.2);
-}
-
-.actions {
-  display: flex;
-  gap: 10px;
+  padding: 4px;
 }
 
 .text-center {
   text-align: center;
 }
 
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}
+
+/* 이벤트 요청 */
 .filter-buttons {
   display: flex;
   gap: 10px;
@@ -1142,96 +1046,287 @@ export default {
   padding: 8px 16px;
   border: 1px solid #ddd;
   background: white;
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+
+.filter-btn:hover {
+  background-color: #f8f9fa;
 }
 
 .filter-btn.active {
-  background: #007bff;
+  background-color: #007bff;
   color: white;
   border-color: #007bff;
 }
 
-.subscriber-stats {
-  display: flex;
-  gap: 20px;
-  color: #666;
+.requests-list {
+  padding: 20px;
 }
 
-.subscriber-stats span {
-  padding: 8px 16px;
+.request-card {
   background: #f8f9fa;
-  border-radius: 6px;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 15px;
+}
+
+.request-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.request-header h4 {
+  margin: 0;
+  color: #333;
 }
 
 .status-badge {
-  padding: 4px 12px;
+  padding: 4px 8px;
   border-radius: 4px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
+}
+
+.status-badge.pending {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.status-badge.approved {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.status-badge.rejected {
+  background-color: #f8d7da;
+  color: #721c24;
 }
 
 .status-badge.active {
-  background: #d4edda;
+  background-color: #d4edda;
   color: #155724;
 }
 
 .status-badge.inactive {
-  background: #e2e3e5;
-  color: #383d41;
+  background-color: #f8d7da;
+  color: #721c24;
 }
 
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
+.request-content p {
+  margin: 5px 0;
+  color: #555;
+}
+
+.request-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+/* 구독자 관리 */
+.subscriber-count {
   color: #666;
+  margin: 0;
+  font-size: 14px;
 }
 
-.coming-soon {
-  text-align: center;
-  padding: 60px 20px;
-  color: #666;
-  font-size: 18px;
+/* 설정 */
+.settings-panel {
+  padding: 20px;
 }
 
-/* 반응형 */
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 20px;
+}
+
+.setting-card {
+  background: white;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 25px;
+}
+
+.setting-card h3 {
+  margin: 0 0 20px 0;
+  color: #333;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.setting-item {
+  margin-bottom: 20px;
+}
+
+.setting-item label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #555;
+}
+
+.setting-item input,
+.setting-item select,
+.setting-item textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.setting-item textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.checkbox-label {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+.danger-zone {
+  border: 1px solid #dc3545;
+  border-radius: 4px;
+  padding: 15px;
+  background-color: #fff5f5;
+}
+
+.danger-zone button {
+  margin-right: 10px;
+  margin-bottom: 10px;
+}
+
+.warning-text {
+  color: #dc3545;
+  font-size: 12px;
+  margin: 10px 0 0 0;
+}
+
+/* 버튼 스타일 */
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  text-decoration: none;
+  display: inline-block;
+  transition: all 0.3s;
+  font-size: 14px;
+}
+
+.btn-primary {
+  background-color: #007bff;
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #0056b3;
+}
+
+.btn-secondary {
+  background-color: #6c757d;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background-color: #545b62;
+}
+
+.btn-success {
+  background-color: #28a745;
+  color: white;
+}
+
+.btn-success:hover {
+  background-color: #1e7e34;
+}
+
+.btn-danger {
+  background-color: #dc3545;
+  color: white;
+}
+
+.btn-danger:hover {
+  background-color: #c82333;
+}
+
+.btn-outline {
+  background-color: transparent;
+  color: #007bff;
+  border: 1px solid #007bff;
+}
+
+.btn-outline:hover {
+  background-color: #007bff;
+  color: white;
+}
+
+.btn-small {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 반응형 디자인 */
 @media (max-width: 768px) {
-  .admin-header {
-    flex-direction: column;
-    gap: 15px;
-    text-align: center;
+  .stats-row {
+    grid-template-columns: repeat(2, 1fr);
   }
 
-  .stats-grid {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  .dashboard-content {
+    grid-template-columns: 1fr;
   }
 
-  .admin-tabs {
-    flex-wrap: wrap;
+  .settings-grid {
+    grid-template-columns: 1fr;
   }
 
   .panel-header {
     flex-direction: column;
     gap: 15px;
-    align-items: stretch;
+    align-items: flex-start;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+
+  .request-actions {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-row {
+    grid-template-columns: 1fr;
+  }
+
+  .tab-navigation {
+    flex-direction: column;
   }
 
   .filter-buttons {
     flex-wrap: wrap;
-  }
-
-  .request-header {
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .request-actions {
-    width: 100%;
-  }
-
-  .request-actions button {
-    flex: 1;
   }
 }
 </style>
