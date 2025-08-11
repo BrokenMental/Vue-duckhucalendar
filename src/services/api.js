@@ -464,14 +464,26 @@ export const scheduleAPI = {
  * 이벤트 요청 관련 API
  */
 export const eventRequestAPI = {
-
   /**
-   * 이벤트 요청 제출
+   * 이벤트 요청 제출 (일반 사용자)
    * @param {Object} requestData - 요청 데이터
    */
   async submitEventRequest(requestData) {
     try {
-      const response = await apiClient.post('/event-requests/submit', requestData)  // /submit 경로 추가
+      // eventData를 JSON 문자열로 변환
+      const payload = {
+        requestType: requestData.requestType || 'ADD',
+        requesterEmail: requestData.requesterEmail,
+        eventData: JSON.stringify({
+          title: requestData.title,
+          description: requestData.description,
+          proposedDate: requestData.proposedDate,
+          category: requestData.category,
+          targetEvent: requestData.targetEvent
+        })
+      }
+
+      const response = await apiClient.post('/event-requests/submit', payload)
       return response.data
     } catch (error) {
       throw new Error(error.userMessage || '이벤트 요청 제출에 실패했습니다.')
@@ -480,12 +492,11 @@ export const eventRequestAPI = {
 
   /**
    * 이벤트 요청 목록 조회 (관리자 전용)
-   * @param {string} status - 상태 필터 (PENDING, APPROVED, REJECTED)
+   * 수정: 올바른 경로 사용
    */
-  async getEventRequests(status = null) {
+  async getEventRequests() {
     try {
-      const url = status ? `/event-requests?status=${status}` : '/event-requests'
-      const response = await apiClient.get(url)
+      const response = await apiClient.get('/event-requests/admin/list')  // 올바른 경로
       return response.data
     } catch (error) {
       throw new Error(error.userMessage || '이벤트 요청 목록을 불러오는데 실패했습니다.')
@@ -558,7 +569,9 @@ export const eventRequestAPI = {
    */
   async updateRequestStatus(requestId, status) {
     try {
-      const response = await apiClient.put(`/event-requests/admin/${requestId}/status?status=${status}`)
+      const response = await apiClient.put(
+        `/event-requests/admin/${requestId}/status?status=${status}`
+      )
       return response.data
     } catch (error) {
       throw new Error(error.userMessage || '요청 상태 업데이트에 실패했습니다.')
@@ -567,13 +580,14 @@ export const eventRequestAPI = {
 
   /**
    * 이메일 인증 코드 전송
+   * @param {string} email - 이메일 주소
    */
   async sendVerificationCode(email) {
     try {
       const response = await apiClient.post('/event-requests/send-verification', { email })
       return response.data
     } catch (error) {
-      throw new Error(error.response?.data?.message || '인증 코드 전송에 실패했습니다.')
+      throw new Error(error.userMessage || '인증 코드 전송에 실패했습니다.')
     }
   },
 
@@ -587,9 +601,9 @@ export const eventRequestAPI = {
       const response = await apiClient.post('/event-requests/verify-email', { email, code })
       return response.data
     } catch (error) {
-      throw new Error(error.response?.data?.message || '이메일 인증에 실패했습니다.')
+      throw new Error(error.userMessage || '이메일 인증에 실패했습니다.')
     }
-  }
+  },
 }
 
 /**
