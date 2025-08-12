@@ -17,7 +17,18 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': {
+      // 모든 API 요청을 백엔드로 프록시
+      '/holidays': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false
+      },
+      '/schedules': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false
+      },
+      '/admin': {
         target: 'http://localhost:8080',
         changeOrigin: true,
         secure: false

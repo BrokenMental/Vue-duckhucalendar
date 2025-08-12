@@ -58,49 +58,69 @@
         <!-- 날짜 그리드 -->
         <div class="date-grid">
           <div v-for="(week, weekIndex) in duckHuCalendarWeeks" :key="`week-${weekIndex}`" class="week-row">
-            <div v-for="(day, dayIndex) in week" :key="`day-${day.key}`"
-                 class="date-cell"
-                 :class="{
-                   'other-month': !day.isCurrentMonth,
-                   'today': day.isToday,
-                   'weekend': dayIndex === 0 || dayIndex === 6
-                 }">
-              <!-- 일정 추가 클릭 이벤트 제거 -->
-              <div class="date-number">{{ day.date }}</div>
+            <div
+              v-for="(day, dayIndex) in week"
+              :key="`${weekIndex}-${dayIndex}`"
+              class="date-cell"
+              :class="{
+                'today': day.isToday,
+                'other-month': !day.isCurrentMonth,
+                'sunday': dayIndex === 0,
+                'saturday': dayIndex === 6,
+                'has-holiday': getHolidaysForDay(day.fullDate).length > 0
+              }"
+              @click="showDuckHuDaySchedules(day.fullDate)"
+            >
+              <!-- 날짜 표시 -->
+              <div class="date-number">
+                {{ day.date }}
+              </div>
 
-              <!-- 일정 개수 표시 (4개 이상일 때) -->
-              <div v-if="getDuckHuScheduleCountForDay(day.fullDate) >= 4"
-                   class="event-count-badge"
-                   @click.stop="showDuckHuDaySchedules(day.fullDate)">
-                {{ getDuckHuScheduleCountForDay(day.fullDate) }}
+              <!-- 공휴일/국경일 표시 -->
+              <div v-if="getHolidaysForDay(day.fullDate).length > 0" class="holiday-info">
+                <div class="holiday-main">
+                  <!-- 첫 번째 공휴일 (국경일 우선) -->
+                  <span
+                    class="holiday-name"
+                    :style="{ color: getHolidaysForDay(day.fullDate)[0].color }"
+                    :title="getHolidaysForDay(day.fullDate)[0].description"
+                  >
+                    {{ getHolidaysForDay(day.fullDate)[0].name }}
+                  </span>
+
+                  <!-- 추가 공휴일이 있는 경우 개수 표시 -->
+                  <span
+                    v-if="getHolidaysForDay(day.fullDate).length > 1"
+                    class="holiday-count"
+                    @click.stop="showHolidayDetail(day.fullDate, $event)"
+                    :title="`${getHolidaysForDay(day.fullDate).length - 1}개 추가 공휴일`"
+                  >
+                    +{{ getHolidaysForDay(day.fullDate).length - 1 }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- 일정 개수 표시 -->
+              <div v-if="getDuckHuScheduleCountForDay(day.fullDate) > 0" class="schedule-count">
+                일정 {{ getDuckHuScheduleCountForDay(day.fullDate) }}개
               </div>
             </div>
           </div>
         </div>
 
-        <!-- 이벤트 레이어 -->
-        <div class="events-layer" ref="duckHuEventsLayer">
-          <!-- 각 주별로 이벤트 렌더링 -->
-          <div v-for="(week, weekIndex) in duckHuCalendarWeeks" :key="`events-week-${weekIndex}`"
-               class="week-events"
-               :style="{ top: `${weekIndex * DUCKHU_CELL_HEIGHT}px`, height: `${DUCKHU_CELL_HEIGHT}px` }">
-
-            <!-- 해당 주의 이벤트들 -->
-            <div v-for="(event) in getDuckHuEventsForWeek(week, weekIndex)"
-                 :key="`event-${event.id}-${weekIndex}`"
-                 class="event-bar"
-                 :class="{
-                   'event-start': event.isStart,
-                   'event-end': event.isEnd,
-                   'event-continues': !event.isStart && !event.isEnd
-                 }"
-                 :style="getDuckHuEventStyle(event, week)"
-                 @click.stop="openDuckHuScheduleDetail(event.schedule)"
-                 @mouseenter="showDuckHuEventTooltip(event.schedule, $event)"
-                 @mouseleave="hideDuckHuTooltip">
-
-              <!-- 이벤트 제목 (시작 부분에만 표시) -->
-              <span v-if="event.isStart" class="event-title">{{ event.schedule.title }}</span>
+        <!-- 일정 표시 레이어 -->
+        <div class="events-layer">
+          <div v-for="(week, weekIndex) in duckHuCalendarWeeks" :key="`events-week-${weekIndex}`" class="events-week">
+            <div
+              v-for="event in getDuckHuEventsForWeek(week, weekIndex)"
+              :key="`event-${event.schedule.id}-${event.weekIndex}-${event.rowIndex}`"
+              class="event-item"
+              :style="getDuckHuEventStyle(event, weekIndex)"
+              @click="openDuckHuScheduleDetail(event.schedule)"
+              @mouseenter="showDuckHuEventTooltip(event.schedule, $event)"
+              @mouseleave="hideDuckHuTooltip"
+            >
+              <span v-if="event.isStart" class="event-time">{{ event.schedule.startTime || '' }}</span>
               <span v-else-if="event.showTitle" class="event-title">{{ event.schedule.title }}</span>
             </div>
           </div>
@@ -108,12 +128,33 @@
       </div>
     </div>
 
-    <!-- 일정 상세보기 모달만 유지 (추가/수정 모달 제거) -->
+    <!-- 일정 상세보기 모달 -->
     <ScheduleDetailModal
       :show="showDuckHuDetailModal"
       :selected-schedules="selectedDuckHuSchedules"
       @close="closeDuckHuDetailModal"
     />
+
+    <!-- 공휴일 상세보기 모달 -->
+    <div v-if="showHolidayDetailModal" class="modal-overlay" @click="closeHolidayDetailModal">
+      <div class="holiday-modal" @click.stop>
+        <div class="holiday-modal-header">
+          <h3>{{ formatDateForDisplay(selectedHolidayDate) }} 공휴일</h3>
+          <button class="close-btn" @click="closeHolidayDetailModal">×</button>
+        </div>
+        <div class="holiday-modal-body">
+          <div v-for="holiday in selectedDateHolidays" :key="holiday.id" class="holiday-item">
+            <div class="holiday-badge" :style="{ backgroundColor: holiday.color }">
+              {{ getHolidayTypeDisplayName(holiday.holidayType) }}
+            </div>
+            <div class="holiday-details">
+              <div class="holiday-title">{{ holiday.name }}</div>
+              <div v-if="holiday.description" class="holiday-description">{{ holiday.description }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- 툴팁 -->
     <div v-if="duckHuTooltip.show" class="event-tooltip" :style="{ left: duckHuTooltip.x + 'px', top: duckHuTooltip.y + 'px' }">
@@ -129,6 +170,8 @@
 <script>
 import ScheduleDetailModal from '@/components/ScheduleDetailModal.vue'
 import { scheduleAPI } from '@/services/api.js'
+import { holidayUtils } from '@/services/holidayAPI.js'
+import { holidayInitUtils } from '@/services/holidayInitializer.js'
 
 export default {
   name: 'DuckHuCalendar',
@@ -162,9 +205,19 @@ export default {
       loading: false,
       error: null,
 
+      // 공휴일 관련
+      holidays: [],
+      holidaysByDate: {},
+      holidayLoading: false,
+
       // 모달 상태
       showDuckHuDetailModal: false,
       selectedDuckHuSchedules: [],
+
+      // 공휴일 상세보기 모달
+      showHolidayDetailModal: false,
+      selectedHolidayDate: null,
+      selectedDateHolidays: [],
 
       // 툴팁
       duckHuTooltip: {
@@ -194,16 +247,21 @@ export default {
     selectedYear() {
       this.generateDuckHuCalendar()
       this.loadDuckHuSchedules() // 연도 변경 시 일정 다시 로드
+      this.loadHolidays() // 공휴일도 다시 로드
     },
     selectedMonth() {
       this.generateDuckHuCalendar()
       this.loadDuckHuSchedules() // 월 변경 시 일정 다시 로드
+      this.loadHolidays() // 공휴일도 다시 로드
     }
   },
 
   async mounted() {
     this.generateDuckHuCalendar()
-    await this.loadDuckHuSchedules()
+    await Promise.all([
+      this.loadDuckHuSchedules(),
+      this.loadHolidays()
+    ])
     this.calculateDuckHuCellWidth()
     this.setupDuckHuNotifications()
     this.scheduleDuckHuNotifications()
@@ -248,7 +306,7 @@ export default {
           week.push({
             date: current.getDate(),
             fullDate: this.formatDuckHuDate(current),
-            isCurrentMonth: current.getMonth() === month,
+            isCurrentMonth: current.getFullYear() === year && current.getMonth() === month,
             isToday: this.isDuckHuToday(current),
             key: `${current.getFullYear()}-${current.getMonth()}-${current.getDate()}`
           })
@@ -270,6 +328,102 @@ export default {
           this.DUCKHU_CELL_WIDTH = container.offsetWidth / 7
         }
       })
+    },
+
+    /**
+     * 공휴일 데이터 로드 (새로운 공공데이터 연동 방식)
+     */
+    async loadHolidays() {
+      if (this.holidayLoading) return
+
+      this.holidayLoading = true
+
+      try {
+        // 현재 월의 시작일과 끝일 계산
+        const startDate = new Date(this.selectedYear, this.selectedMonth, 1)
+        const endDate = new Date(this.selectedYear, this.selectedMonth + 1, 0)
+
+        // 캘린더 그리드 범위로 확장 (이전/다음 월 일부 포함)
+        const calendarStart = new Date(startDate)
+        calendarStart.setDate(calendarStart.getDate() - startDate.getDay())
+
+        const calendarEnd = new Date(endDate)
+        calendarEnd.setDate(calendarEnd.getDate() + (6 - endDate.getDay()))
+
+        // 날짜를 문자열로 변환
+        const startDateStr = this.formatDuckHuDate(calendarStart)
+        const endDateStr = this.formatDuckHuDate(calendarEnd)
+
+        console.log('공휴일 데이터 로드 범위:', startDateStr, '~', endDateStr)
+
+        // 공휴일 초기화 및 조회 (새로운 방식)
+        const result = await holidayInitUtils.getHolidaysForCalendar(startDateStr, endDateStr)
+
+        if (result.success) {
+          this.holidaysByDate = result.holidays
+          console.log(`✅ ${result.totalCount}개의 공휴일을 로드했습니다.`)
+        } else {
+          console.warn(`⚠️ 공휴일 로드 실패, 기본 데이터 사용: ${result.error}`)
+          this.holidaysByDate = result.holidays || {}
+        }
+
+      } catch (error) {
+        console.error('❌ 공휴일 로드 실패:', error)
+        this.holidays = []
+        this.holidaysByDate = {}
+
+        // 사용자에게 친화적인 에러 메시지 표시
+        const userMessage = holidayInitUtils.getErrorMessage(error)
+        console.warn('사용자 메시지:', userMessage)
+      } finally {
+        this.holidayLoading = false
+      }
+    },
+
+    /**
+     * 특정 날짜의 공휴일 목록 반환
+     */
+    getHolidaysForDay(date) {
+      return this.holidaysByDate[date] || []
+    },
+
+    /**
+     * 공휴일 타입별 표시 이름 반환
+     */
+    getHolidayTypeDisplayName(holidayType) {
+      return holidayUtils.getHolidayTypeName(holidayType)
+    },
+
+    /**
+     * 공휴일 상세보기 모달 열기
+     */
+    showHolidayDetail(date, event) {
+      event.preventDefault()
+      event.stopPropagation()
+
+      const holidays = this.getHolidaysForDay(date)
+      if (holidays.length > 0) {
+        this.selectedHolidayDate = date
+        this.selectedDateHolidays = holidays
+        this.showHolidayDetailModal = true
+      }
+    },
+
+    /**
+     * 공휴일 상세보기 모달 닫기
+     */
+    closeHolidayDetailModal() {
+      this.showHolidayDetailModal = false
+      this.selectedHolidayDate = null
+      this.selectedDateHolidays = []
+    },
+
+    /**
+     * 날짜 표시용 포맷팅
+     */
+    formatDateForDisplay(dateStr) {
+      const date = new Date(dateStr + 'T00:00:00')
+      return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일`
     },
 
     /**
@@ -314,7 +468,6 @@ export default {
       } catch (error) {
         console.error('❌ 일정 로드 실패:', error)
         this.error = '일정을 불러오는데 실패했습니다.'
-
         // 에러 시 빈 배열로 설정
         this.duckHuSchedules = []
       } finally {
@@ -372,15 +525,17 @@ export default {
         const endDayIndex = week.findIndex(day => day.fullDate === eventEndDate)
 
         if (startDayIndex !== -1 && endDayIndex !== -1) {
+          const rowIndex = Math.floor(index / this.DUCKHU_MAX_EVENTS_PER_ROW)
+
           events.push({
-            id: `${schedule.id}-${weekIndex}`,
             schedule: schedule,
+            weekIndex: weekIndex,
+            rowIndex: rowIndex,
             startDayIndex: startDayIndex,
             endDayIndex: endDayIndex,
             isStart: schedule.startDate === eventStartDate,
             isEnd: schedule.endDate === eventEndDate,
-            showTitle: schedule.startDate === eventStartDate || startDayIndex === 0,
-            row: Math.min(index, this.DUCKHU_MAX_EVENTS_PER_ROW - 1)
+            showTitle: schedule.startDate === eventStartDate
           })
         }
       })
@@ -391,33 +546,31 @@ export default {
     /**
      * DuckHu 이벤트 스타일 계산
      */
-    getDuckHuEventStyle(event, week) {
-      const weekEvents = this.getDuckHuEventsForWeek(week, 0)
-      const eventCount = weekEvents.length
+    getDuckHuEventStyle(event, weekIndex) {
+      const top = weekIndex * this.DUCKHU_CELL_HEIGHT + 35 + (event.rowIndex * (this.DUCKHU_EVENT_HEIGHT + this.DUCKHU_EVENT_MARGIN))
+      const left = event.startDayIndex * this.DUCKHU_CELL_WIDTH
+      const width = (event.endDayIndex - event.startDayIndex + 1) * this.DUCKHU_CELL_WIDTH - 4
 
-      const left = event.startDayIndex * (100 / 7)
-      const width = (event.endDayIndex - event.startDayIndex + 1) * (100 / 7)
-      const top = 30 + (event.row * (this.DUCKHU_EVENT_HEIGHT + this.DUCKHU_EVENT_MARGIN))
-
-      let backgroundColor = event.schedule.color
-      let backgroundImage = 'none'
+      let backgroundColor = event.schedule.color || '#3498db'
       let animation = 'none'
 
-      if (eventCount >= 4) {
-        backgroundColor = 'transparent'
-        backgroundImage = 'linear-gradient(90deg, #ff0000, #ff8000, #ffff00, #80ff00, #00ff00, #00ff80, #00ffff, #0080ff, #0000ff, #8000ff, #ff00ff, #ff0080)'
-        animation = 'duckhu-rainbow-slide 3s ease-in-out infinite'
+      if (event.schedule.priority === 1) {
+        backgroundColor = 'linear-gradient(45deg, #ff6b6b, #ff8e53, #ff6b6b, #ff8e53)'
+        animation = 'shimmer 2s ease-in-out infinite'
       }
 
       return {
         position: 'absolute',
-        left: `${left}%`,
-        width: `${width}%`,
-        top: `${top}px`,
-        height: `${this.DUCKHU_EVENT_HEIGHT}px`,
+        top: top + 'px',
+        left: left + 'px',
+        width: width + 'px',
+        height: this.DUCKHU_EVENT_HEIGHT + 'px',
         backgroundColor: backgroundColor,
-        backgroundImage: backgroundImage,
-        backgroundSize: eventCount >= 4 ? '400% 400%' : 'auto',
+        color: 'white',
+        fontSize: '12px',
+        fontWeight: '500',
+        textAlign: 'left',
+        backgroundSize: event.schedule.priority === 1 ? '400% 400%' : 'auto',
         animation: animation,
         borderRadius: event.isStart && event.isEnd ? '4px' :
                     event.isStart ? '4px 0 0 4px' :
@@ -531,69 +684,46 @@ export default {
         Notification.requestPermission().then(permission => {
           if (permission === 'granted') {
             console.log('DuckHu 캘린더 알림 권한이 허용되었습니다.')
+          } else {
+            console.log('DuckHu 캘린더 알림 권한이 거부되었습니다.')
           }
         })
       }
     },
 
     /**
-     * DuckHu 일정 알림 스케줄링
+     * DuckHu 알림 예약
      */
     scheduleDuckHuNotifications() {
+      // 기존 알림 제거
       if (this.duckHuNotificationTimers) {
         this.duckHuNotificationTimers.forEach(timer => clearTimeout(timer))
+        this.duckHuNotificationTimers = []
       }
-      this.duckHuNotificationTimers = []
 
-      const now = new Date()
-
-      this.duckHuSchedules.forEach(schedule => {
-        let notificationTime
-
-        if (schedule.startTime) {
-          const [hours, minutes] = schedule.startTime.split(':')
-          notificationTime = new Date(schedule.startDate + `T${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}:00`)
-        } else {
-          notificationTime = new Date(schedule.startDate + 'T09:00:00')
-        }
-
-        if (notificationTime > now) {
-          const delay = notificationTime.getTime() - now.getTime()
-
-          const timer = setTimeout(() => {
-            this.showDuckHuNotification(schedule)
-          }, delay)
-
-          this.duckHuNotificationTimers.push(timer)
-        }
-      })
-    },
-
-    /**
-     * DuckHu 알림 표시
-     */
-    showDuckHuNotification(schedule) {
       if ('Notification' in window && Notification.permission === 'granted') {
-        const timeStr = schedule.startTime ?
-          `${schedule.startTime}` : '오전 9시'
+        const now = new Date()
 
-        const notification = new Notification(`🦆 DuckHu 일정 알림: ${schedule.title}`, {
-          body: `${timeStr}에 시작하는 일정이 있습니다.`,
-          icon: '/favicon.ico',
-          tag: `duckhu-schedule-${schedule.id}`,
-          requireInteraction: true
+        this.duckHuSchedules.forEach(schedule => {
+          if (schedule.startTime) {
+            const scheduleDateTime = new Date(`${schedule.startDate}T${schedule.startTime}`)
+            const notificationTime = new Date(scheduleDateTime.getTime() - 10 * 60 * 1000) // 10분 전
+
+            if (notificationTime > now) {
+              const timeout = notificationTime.getTime() - now.getTime()
+
+              const timer = setTimeout(() => {
+                new Notification(`📅 일정 알림`, {
+                  body: `${schedule.title}\n10분 후 시작됩니다.`,
+                  icon: '/favicon.ico',
+                  tag: `schedule-${schedule.id}`
+                })
+              }, timeout)
+
+              this.duckHuNotificationTimers.push(timer)
+            }
+          }
         })
-
-        notification.onclick = () => {
-          window.focus()
-          this.selectedDuckHuSchedules = [schedule]
-          this.showDuckHuDetailModal = true
-          notification.close()
-        }
-
-        setTimeout(() => {
-          notification.close()
-        }, 10000)
       }
     }
   }
@@ -601,13 +731,15 @@ export default {
 </script>
 
 <style scoped>
+/* 전체 캘린더 컨테이너 */
 .duckhu-calendar {
-  max-width: 1200px;
-  margin: 0 auto;
-  background: white;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 10px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  margin: 20px auto;
+  max-width: 1200px;
 }
 
 /* 캘린더 헤더 */
@@ -615,71 +747,16 @@ export default {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   padding: 20px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* 데스크톱 헤더 */
 .desktop-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 15px;
 }
 
-/* 모바일 헤더 */
 .mobile-header {
   display: none;
-}.mobile-nav-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.mobile-nav-button {
-  background: rgba(255, 255, 255, 0.2);
-  border: none;
-  color: white;
-  padding: 8px 12px;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.3s ease;
-  flex-shrink: 0;
-}
-
-.mobile-nav-button:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-.mobile-select {
-  padding: 8px 10px;
-  border: none;
-  border-radius: 5px;
-  background: white;
-  font-size: 14px;
-  cursor: pointer;
-  flex: 1;
-  min-width: 80px;
-}
-
-/* 기존 네비게이션 버튼 스타일 유지 */
-.nav-button {
-  background: rgba(255, 255, 255, 0.2);
-  border: none;
-  color: white;
-  padding: 10px 15px;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 16px;
-  transition: all 0.3s ease;
-  min-width: 80px;
-}
-
-.nav-button:hover {
-  background: rgba(255, 255, 255, 0.3);
-  transform: translateY(-1px);
 }
 
 .month-year-selector {
@@ -714,36 +791,44 @@ export default {
   transform: translateY(-1px);
 }
 
-.month-year-selector {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
+/* 모바일 반응형 */
+@media (max-width: 768px) {
+  .desktop-header {
+    display: none;
+  }
 
-.month-year-selector select {
-  padding: 8px 12px;
-  border: none;
-  border-radius: 5px;
-  background: white;
-  font-size: 16px;
-  cursor: pointer;
-}
+  .mobile-header {
+    display: block;
+  }
 
-.add-schedule-btn {
-  background: #4CAF50;
-  color: white;
-  border: none;
-  padding: 12px 20px;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 16px;
-  transition: all 0.3s ease;
-  font-weight: 600;
-}
+  .mobile-nav-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
 
-.add-schedule-btn:hover {
-  background: #45a049;
-  transform: translateY(-2px);
+  .mobile-nav-button {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    flex: 0 0 auto;
+  }
+
+  .mobile-select {
+    padding: 6px 8px;
+    border: none;
+    border-radius: 5px;
+    background: white;
+    font-size: 14px;
+    cursor: pointer;
+    flex: 1;
+  }
 }
 
 /* 캘린더 컨테이너 */
@@ -803,6 +888,8 @@ export default {
   cursor: pointer;
   transition: background-color 0.2s ease;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .date-cell:last-child {
@@ -819,120 +906,238 @@ export default {
 
 .date-cell.other-month {
   background: #f8f9fa;
-  opacity: 0.6;
-}
-
-.date-cell.weekend .date-number {
-  color: #dc3545;
-}
-
-.date-number {
-  font-size: 14px;
-  font-weight: bold;
-  color: #495057;
-}
-
-.date-cell.other-month .date-number {
   color: #adb5bd;
 }
 
-/* 이벤트 레이어 */
+/* 일요일 스타일 */
+.date-cell.sunday .date-number {
+  color: #dc3545;
+  font-weight: bold;
+}
+
+/* 토요일 스타일 */
+.date-cell.saturday .date-number {
+  color: #007bff;
+  font-weight: bold;
+}
+
+/* 공휴일이 있는 날짜 스타일 */
+.date-cell.has-holiday {
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+}
+
+/* 날짜 숫자 */
+.date-number {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  flex-shrink: 0;
+}
+
+/* 공휴일 정보 표시 */
+.holiday-info {
+  margin-bottom: 4px;
+  flex-shrink: 0;
+}
+
+.holiday-main {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.holiday-name {
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 70px;
+}
+
+.holiday-count {
+  background: #ff6b6b;
+  color: white;
+  font-size: 10px;
+  padding: 2px 4px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 600;
+  min-width: 20px;
+  text-align: center;
+}
+
+.holiday-count:hover {
+  background: #e55656;
+  transform: scale(1.1);
+}
+
+/* 일정 개수 표시 */
+.schedule-count {
+  font-size: 11px;
+  color: #6c757d;
+  margin-top: auto;
+  text-align: center;
+  background: rgba(108, 117, 125, 0.1);
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+
+/* 일정 표시 레이어 */
 .events-layer {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  z-index: 10;
+  bottom: 0;
   pointer-events: none;
+  z-index: 2;
 }
 
-.week-events {
-  position: absolute;
-  left: 0;
-  right: 0;
+.events-week {
+  position: relative;
 }
 
-/* 이벤트 바 */
-.event-bar {
+.event-item {
   pointer-events: auto;
-  color: white;
-  font-size: 11px;
-  font-weight: 500;
   transition: all 0.2s ease;
-  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
-.event-bar:hover {
+.event-item:hover {
   transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
-  z-index: 20;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  z-index: 15 !important;
 }
 
-.event-title {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.event-time {
+  font-size: 11px;
   font-weight: 600;
 }
 
-/* 연속 이벤트 스타일 */
-.event-bar.event-continues {
-  border-left: 2px dashed rgba(255, 255, 255, 0.5);
-  border-right: 2px dashed rgba(255, 255, 255, 0.5);
+.event-title {
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.event-bar.event-start.event-continues {
-  border-right: 2px dashed rgba(255, 255, 255, 0.5);
+/* 공휴일 상세보기 모달 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
 }
 
-.event-bar.event-end.event-continues {
-  border-left: 2px dashed rgba(255, 255, 255, 0.5);
+.holiday-modal {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow: hidden;
+  animation: modalSlideIn 0.3s ease-out;
 }
 
-/* DuckHu 무지개 이벤트 애니메이션 */
-@keyframes duckhu-rainbow-slide {
-  0%, 100% {
-    background-position: 0% 50%;
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50px) scale(0.9);
   }
-  50% {
-    background-position: 100% 50%;
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
-.duckhu-rainbow-event {
-  background: linear-gradient(90deg,
-    #ff0000, #ff8000, #ffff00, #80ff00,
-    #00ff00, #00ff80, #00ffff, #0080ff,
-    #0000ff, #8000ff, #ff00ff, #ff0080
-  ) !important;
-  background-size: 400% 400% !important;
-  animation: duckhu-rainbow-slide 3s ease-in-out infinite !important;
-}
-
-/* 일정 개수 표시 */
-.event-count-badge {
-  position: absolute;
-  bottom: 4px;
-  right: 4px;
-  background: #6c757d;
+.holiday-modal-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.holiday-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  width: 18px;
-  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
-  font-weight: bold;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  z-index: 15;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease;
 }
 
-.event-count-badge:hover {
-  background: #495057;
-  transform: scale(1.1);
+.close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.holiday-modal-body {
+  padding: 20px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.holiday-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.holiday-item:last-child {
+  border-bottom: none;
+}
+
+.holiday-badge {
+  background: #ff6b6b;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.holiday-details {
+  flex: 1;
+}
+
+.holiday-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #343a40;
+  margin-bottom: 4px;
+}
+
+.holiday-description {
+  font-size: 14px;
+  color: #6c757d;
+  line-height: 1.4;
 }
 
 /* 툴팁 */
@@ -940,71 +1145,53 @@ export default {
   position: fixed;
   background: rgba(0, 0, 0, 0.9);
   color: white;
-  padding: 8px 12px;
+  padding: 10px 12px;
   border-radius: 6px;
   font-size: 12px;
-  z-index: 1000;
+  z-index: 1001;
   pointer-events: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   max-width: 200px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .tooltip-title {
-  font-weight: bold;
+  font-weight: 600;
   margin-bottom: 4px;
 }
 
-.tooltip-date {
-  color: #ccc;
-  margin-bottom: 2px;
-}
-
+.tooltip-date,
 .tooltip-time {
-  color: #ccc;
   font-size: 11px;
+  opacity: 0.9;
 }
 
-/* 반응형 */
-@media (max-width: 768px) {
-  .calendar-header {
-    flex-direction: column;
-    gap: 10px;
+/* 우선순위 애니메이션 */
+@keyframes shimmer {
+  0% {
+    background-position: 0% 50%;
   }
-  .desktop-header {
-    display: none;
+  50% {
+    background-position: 100% 50%;
   }
+  100% {
+    background-position: 0% 50%;
+  }
+}
 
-  .mobile-header {
-    display: block;
+/* 모바일 최적화 */
+@media (max-width: 768px) {
+  .duckhu-calendar {
+    margin: 10px;
+    border-radius: 8px;
   }
 
   .calendar-header {
     padding: 15px;
   }
 
-  .date-cell {
-    height: 80px;
-    padding: 4px;
-  }
-
-  .event-bar {
-    font-size: 10px;
-    height: 16px;
-  }
-
-  .event-count-badge {
-    width: 16px;
-    height: 16px;
-    font-size: 9px;
-  }
-
-  .duckhu-calendar {
-    margin: 10px;
-    border-radius: 8px;
-  }
-
-  .month-year-selector {
-    order: -1;
+  .weekday-cell {
+    padding: 10px 4px;
+    font-size: 12px;
   }
 
   .date-cell {
@@ -1012,77 +1199,39 @@ export default {
     padding: 4px;
   }
 
-  .event-bar {
+  .date-number {
+    font-size: 14px;
+  }
+
+  .holiday-name {
     font-size: 10px;
-    height: 16px;
+    max-width: 50px;
   }
 
-  .event-count-badge {
-    width: 16px;
-    height: 16px;
+  .holiday-count {
     font-size: 9px;
+    padding: 1px 3px;
   }
 
-  .duckhu-calendar {
+  .schedule-count {
+    font-size: 10px;
+  }
+
+  .event-item {
+    font-size: 10px;
+  }
+
+  .holiday-modal {
+    width: 95%;
     margin: 10px;
-    border-radius: 8px;
-  }
-}
-
-/* 프린트 스타일 */
-@media print {
-  .duckhu-calendar {
-    background: white !important;
-    color: black !important;
   }
 
-  .nav-button,
-  .add-schedule-btn {
-    display: none !important;
+  .holiday-modal-header {
+    padding: 15px;
   }
 
-  .calendar-container {
-    box-shadow: none !important;
-    border: 1px solid #000000;
-  }
-
-  .date-cell {
-    border: 1px solid #cccccc;
-    background: white !important;
-  }
-
-  .event-bar {
-    background: white !important;
-    color: black !important;
-    border: 1px solid #000000;
-  }
-}
-
-/* 접근성 개선 */
-@media (prefers-reduced-motion: reduce) {
-  .duckhu-calendar *,
-  .event-bar,
-  .nav-button,
-  .add-schedule-btn,
-  .event-count-badge {
-    transition: none !important;
-    animation: none !important;
-  }
-}
-
-/* 고대비 모드 지원 */
-@media (prefers-contrast: high) {
-  .date-cell {
-    border: 2px solid #000000;
-  }
-
-  .event-bar {
-    border: 2px solid #000000;
-    font-weight: bold;
-  }
-
-  .event-count-badge {
-    border: 2px solid #000000;
+  .holiday-modal-body {
+    padding: 15px;
   }
 }
 </style>
