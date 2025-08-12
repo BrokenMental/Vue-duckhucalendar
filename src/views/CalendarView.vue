@@ -7,104 +7,159 @@
         <DuckHuCalendar />
       </div>
 
-      <!-- 사이드바 섹션 (우측 5단) -->
+      <!-- 사이드바 섹션 (우측) -->
       <div class="sidebar-section">
-        <!-- 1. 메뉴 버튼 (최상단) -->
-        <div class="sidebar-card menu-card">
-          <div class="menu-button-container">
-            <button class="inline-menu-button" @click="toggleMenu">
-              <span class="menu-text">더쿠 캘린더 메뉴</span>
-            </button>
-
-            <!-- 드롭다운 메뉴 -->
-            <transition name="dropdown">
-              <div v-if="showMenu" class="dropdown-menu">
-                <div class="dropdown-item" @click="openEventRequest">
-                  <span class="dropdown-icon">📝</span>
-                  이벤트 추가/수정 요청
-                </div>
-                <div class="dropdown-divider"></div>
-                <div class="dropdown-item" @click="goToSettings">
-                  <span class="dropdown-icon">⚙️</span>
-                  설정
-                </div>
-                <div class="dropdown-divider"></div>
-                <div class="dropdown-item" @click="openEmailSubscription">
-                  <span class="dropdown-icon">📧</span>
-                  이메일로 알림받기
-                </div>
+        <!-- 데스크톱 사이드바 -->
+        <div class="desktop-sidebar">
+          <!-- 1. 공지사항 -->
+          <div class="sidebar-card notice-card">
+            <h3>📢 공지사항</h3>
+            <div class="notice-content">
+              <div class="notice-item">
+                <div class="notice-text">🎉 DuckHu Calendar에 오신 것을 환영합니다!</div>
+                <div class="notice-date">2025.08.12</div>
               </div>
-            </transition>
-          </div>
-        </div>
-
-        <!-- 2. 공지사항 -->
-        <div class="sidebar-card notice-card">
-          <h3>📢 공지사항</h3>
-          <div class="notice-content">
-            <div class="notice-item">
-              <div class="notice-text">🎉 DuckHu Calendar에 오신 것을 환영합니다!</div>
-              <div class="notice-date">2025.08.12</div>
-            </div>
-            <div class="notice-item">
-              <div class="notice-text">새로운 연속 일정 표시 기능이 추가되었습니다.</div>
-              <div class="notice-date">2025.08.10</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 3. 다가올 이벤트 -->
-        <div class="sidebar-card">
-          <h3>📅 다가올 이벤트</h3>
-          <div class="upcoming-events">
-            <div v-if="upcomingEvents.length > 0" class="event-list">
-              <div v-for="event in upcomingEvents" :key="event.id" class="event-item">
-                <div class="event-date">{{ formatEventDate(event) }}</div>
-                <div class="event-title">{{ event.title }}</div>
-                <div class="event-time" v-if="event.startTime">{{ event.startTime }}</div>
+              <div class="notice-item">
+                <div class="notice-text">새로운 연속 일정 표시 기능이 추가되었습니다.</div>
+                <div class="notice-date">2025.08.10</div>
               </div>
             </div>
-            <div v-else class="no-events">
-              다가올 이벤트가 없습니다.
-            </div>
           </div>
-        </div>
 
-        <!-- 4. 최신 추가된 이벤트 -->
-        <div class="sidebar-card">
-          <h3>✨ 최신 이벤트</h3>
-          <div class="recent-events">
-            <div v-if="recentEvents.length > 0" class="event-list">
-              <div v-for="event in recentEvents" :key="event.id" class="event-item">
-                <div class="event-date">{{ formatEventDate(event) }}</div>
-                <div class="event-title">{{ event.title }}</div>
-                <div class="event-badge">NEW</div>
+          <!-- 2. 다가올 이벤트 -->
+          <div class="sidebar-card">
+            <div class="sidebar-header">
+              <h3>📅 다가올 이벤트</h3>
+              <button v-if="!loading" @click="refreshData" class="refresh-btn" title="새로고침">
+                🔄
+              </button>
+            </div>
+            <div class="upcoming-events">
+              <!-- 로딩 상태 -->
+              <div v-if="loading" class="loading-state">
+                <div class="loading-spinner"></div>
+                <div class="loading-text">로딩 중...</div>
+              </div>
+              <!-- 에러 상태 -->
+              <div v-else-if="error" class="error-state">
+                <div class="error-icon">⚠️</div>
+                <div class="error-text">{{ error }}</div>
+                <button @click="refreshData" class="retry-btn">다시 시도</button>
+              </div>
+              <!-- 정상 데이터 -->
+              <div v-else-if="upcomingEvents.length > 0" class="event-list">
+                <div v-for="event in upcomingEvents" :key="event.id" class="event-item">
+                  <div class="event-date">{{ formatEventDate(event) }}</div>
+                  <div class="event-title">{{ event.title }}</div>
+                  <div class="event-time" v-if="event.startTime">{{ event.startTime }}</div>
+                </div>
+              </div>
+              <!-- 빈 상태 -->
+              <div v-else class="no-events">
+                다가올 이벤트가 없습니다.
               </div>
             </div>
-            <div v-else class="no-events">
-              최근 추가된 이벤트가 없습니다.
+          </div>
+
+          <!-- 3. 최신 추가된 이벤트 -->
+          <div class="sidebar-card">
+            <h3>✨ 최신 이벤트</h3>
+            <div class="recent-events">
+              <!-- 로딩 상태 -->
+              <div v-if="loading" class="loading-state">
+                <div class="loading-spinner"></div>
+                <div class="loading-text">로딩 중...</div>
+              </div>
+              <!-- 정상 데이터 -->
+              <div v-else-if="recentEvents.length > 0" class="event-list">
+                <div v-for="event in recentEvents" :key="event.id" class="event-item">
+                  <div class="event-date">{{ formatEventDate(event) }}</div>
+                  <div class="event-title">{{ event.title }}</div>
+                  <div class="event-badge">NEW</div>
+                </div>
+              </div>
+              <!-- 빈 상태 -->
+              <div v-else class="no-events">
+                최근 추가된 이벤트가 없습니다.
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. 광고 영역 (최하단) -->
+          <div class="sidebar-card">
+            <h3>📢 광고</h3>
+            <div class="ad-content">
+              <div class="ad-item">
+                <h4>DuckHu 프리미엄</h4>
+                <p>더 많은 기능과 무제한 일정 관리를 경험해보세요!</p>
+                <button class="ad-button">자세히 보기</button>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- 5. 광고 영역 (최하단) -->
-        <div class="sidebar-card">
-          <h3>📢 광고</h3>
-          <div class="ad-content">
-            <div class="ad-item">
-              <h4>DuckHu 프리미엄</h4>
-              <p>더 많은 기능과 무제한 일정 관리를 경험해보세요!</p>
-              <button class="ad-button">자세히 보기</button>
+        <!-- 모바일 사이드바 -->
+        <div class="mobile-sidebar">
+          <!-- 모바일 상단: 공지사항 + 광고 (한 줄에 배치) -->
+          <div class="mobile-top-section">
+            <!-- 공지사항 (모바일 - 압축 버전) -->
+            <div class="sidebar-card notice-card mobile-card">
+              <h3>📢 공지사항</h3>
+              <div class="notice-content">
+                <div class="notice-item">
+                  <div class="notice-text">🎉 DuckHu Calendar 신규 오픈!</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 광고 (모바일 - 압축 버전) -->
+            <div class="sidebar-card mobile-card">
+              <h3>📢 광고</h3>
+              <div class="ad-content">
+                <div class="ad-item">
+                  <h4>DuckHu 프리미엄</h4>
+                  <p>더 많은 기능을 경험해보세요!</p>
+                  <button class="ad-button">자세히 보기</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- 플로팅 메뉴 버튼 (PC/모바일 공통, 우측 하단) -->
+    <div class="floating-menu">
+      <button class="floating-menu-button" @click="toggleMenu">
+        <span class="floating-menu-icon">⋮</span>
+      </button>
+
+      <!-- 드롭다운 메뉴 -->
+      <transition name="dropdown">
+        <div v-if="showMenu" class="floating-dropdown-menu">
+          <div class="dropdown-item" @click="openEventRequest">
+            <span class="dropdown-icon">📝</span>
+            이벤트 추가/수정 요청
+          </div>
+          <div class="dropdown-divider"></div>
+          <div class="dropdown-item" @click="goToSettings">
+            <span class="dropdown-icon">⚙️</span>
+            설정
+          </div>
+          <div class="dropdown-divider"></div>
+          <div class="dropdown-item" @click="openEmailSubscription">
+            <span class="dropdown-icon">📧</span>
+            이메일로 알림받기
+          </div>
+        </div>
+      </transition>
     </div>
   </div>
 </template>
 
 <script>
 import DuckHuCalendar from '@/components/DuckHuCalendar.vue'
+import { scheduleAPI } from '@/services/api.js'
 
 export default {
   name: 'CalendarView',
@@ -117,36 +172,17 @@ export default {
     return {
       showMenu: false,
 
-      // 더미 데이터 (실제로는 DuckHuCalendar에서 가져와야 함)
-      upcomingEvents: [
-        {
-          id: 1,
-          title: '팀 미팅',
-          startDate: '2025-08-15',
-          startTime: '10:00'
-        },
-        {
-          id: 2,
-          title: '프로젝트 발표',
-          startDate: '2025-08-18',
-          startTime: '14:00'
-        }
-      ],
-
-      recentEvents: [
-        {
-          id: 3,
-          title: '새로운 기능 개발',
-          startDate: '2025-08-20',
-          startTime: null
-        }
-      ]
+      // 실제 데이터로 변경
+      upcomingEvents: [],
+      recentEvents: [],
+      loading: false,
+      error: null
     }
   },
 
-  mounted() {
-    // 외부 클릭 시 메뉴 닫기
+  async mounted() {
     document.addEventListener('click', this.handleOutsideClick)
+    await this.loadSidebarData()
   },
 
   beforeUnmount() {
@@ -154,6 +190,118 @@ export default {
   },
 
   methods: {
+    /**
+     * 사이드바 데이터 로드
+     */
+    async loadSidebarData() {
+      this.loading = true
+      this.error = null
+
+      try {
+        // 병렬로 데이터 로드
+        await Promise.all([
+          this.loadUpcomingEvents(),
+          this.loadRecentEvents()
+        ])
+
+        console.log('✅ 사이드바 데이터 로드 완료')
+      } catch (error) {
+        console.error('❌ 사이드바 데이터 로드 실패:', error)
+        this.error = '데이터를 불러오는데 실패했습니다.'
+      } finally {
+        this.loading = false
+      }
+    },
+
+    /**
+     * 다가올 이벤트 로드
+     */
+    async loadUpcomingEvents() {
+      try {
+        const today = new Date()
+        const nextMonth = new Date(today)
+        nextMonth.setMonth(nextMonth.getMonth() + 1)
+
+        const response = await scheduleAPI.getSchedulesByDateRange({
+          startDate: this.formatDate(today),
+          endDate: this.formatDate(nextMonth)
+        })
+
+        // 오늘 이후의 일정만 필터링하고 시작일순 정렬
+        this.upcomingEvents = (response.schedules || response || [])
+          .filter(schedule => schedule.startDate >= this.formatDate(today))
+          .sort((a, b) => {
+            // 시작일순 정렬
+            const dateCompare = a.startDate.localeCompare(b.startDate)
+            if (dateCompare !== 0) return dateCompare
+
+            // 같은 날이면 우선순위순
+            if (a.priority !== b.priority) {
+              return a.priority - b.priority
+            }
+
+            // 시간순 (시간이 있는 경우)
+            if (a.startTime && b.startTime) {
+              return a.startTime.localeCompare(b.startTime)
+            }
+
+            return 0
+          })
+          .slice(0, 5) // 최대 5개까지만
+
+        console.log(`📅 다가올 이벤트 ${this.upcomingEvents.length}개 로드`)
+      } catch (error) {
+        console.error('다가올 이벤트 로드 실패:', error)
+        this.upcomingEvents = []
+      }
+    },
+
+    /**
+     * 최신 이벤트 로드
+     */
+    async loadRecentEvents() {
+      try {
+        // 최근 생성된 일정 조회
+        const response = await scheduleAPI.getRecentSchedules(5)
+
+        this.recentEvents = (response.schedules || response || [])
+          .sort((a, b) => {
+            // 생성일순 정렬 (최신순)
+            const createdAtA = new Date(a.createdAt || a.startDate)
+            const createdAtB = new Date(b.createdAt || b.startDate)
+            return createdAtB - createdAtA
+          })
+
+        console.log(`✨ 최신 이벤트 ${this.recentEvents.length}개 로드`)
+      } catch (error) {
+        console.error('최신 이벤트 로드 실패:', error)
+
+        // 최신 일정 API가 없는 경우 전체 일정에서 최근 것 추출
+        try {
+          const today = new Date()
+          const oneWeekAgo = new Date(today)
+          oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
+
+          const response = await scheduleAPI.getSchedulesByDateRange({
+            startDate: this.formatDate(oneWeekAgo),
+            endDate: this.formatDate(today)
+          })
+
+          this.recentEvents = (response.schedules || response || [])
+            .sort((a, b) => {
+              const createdAtA = new Date(a.createdAt || a.startDate)
+              const createdAtB = new Date(b.createdAt || b.startDate)
+              return createdAtB - createdAtA
+            })
+            .slice(0, 3)
+
+        } catch (fallbackError) {
+          console.error('최신 이벤트 대체 로드도 실패:', fallbackError)
+          this.recentEvents = []
+        }
+      }
+    },
+
     /**
      * 메뉴 토글
      */
@@ -165,7 +313,7 @@ export default {
      * 외부 클릭 감지
      */
     handleOutsideClick(event) {
-      const menuContainer = event.target.closest('.menu-button-container')
+      const menuContainer = event.target.closest('.floating-menu')
       if (!menuContainer) {
         this.showMenu = false
       }
@@ -198,13 +346,49 @@ export default {
     },
 
     /**
-     * 이벤트 날짜 형식 변환
+     * 날짜 형식 변환 (YYYY-MM-DD)
+     */
+    formatDate(date) {
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    },
+
+    /**
+     * 이벤트 날짜 형식 변환 (표시용)
      */
     formatEventDate(event) {
       const date = new Date(event.startDate + 'T00:00:00')
+      const today = new Date()
+      const tomorrow = new Date(today)
+      tomorrow.setDate(tomorrow.getDate() + 1)
+
+      const eventDateString = this.formatDate(date)
+      const todayString = this.formatDate(today)
+      const tomorrowString = this.formatDate(tomorrow)
+
+      // 오늘, 내일인지 확인
+      if (eventDateString === todayString) {
+        return '오늘'
+      } else if (eventDateString === tomorrowString) {
+        return '내일'
+      }
+
+      // 일반적인 날짜 형식
       const month = date.getMonth() + 1
       const day = date.getDate()
-      return `${month}월 ${day}일`
+
+      // 올해인지 확인
+      if (date.getFullYear() === today.getFullYear()) {
+        return `${month}월 ${day}일`
+      } else {
+        return `${date.getFullYear()}년 ${month}월 ${day}일`
+      }
+    },
+
+    /**
+     * 데이터 새로고침
+     */
+    async refreshData() {
+      await this.loadSidebarData()
     }
   }
 }
@@ -215,7 +399,7 @@ export default {
   height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   position: relative;
-  overflow: hidden; /* 스크롤 방지 */
+  overflow: hidden; /* 데스크톱에서는 스크롤 방지 */
 }
 
 /* 메인 레이아웃 컨테이너 */
@@ -225,7 +409,7 @@ export default {
   padding: 20px;
   gap: 20px;
   position: relative;
-  overflow: hidden; /* 스크롤 방지 */
+  overflow: hidden; /* 데스크톱에서는 스크롤 방지 */
 }
 
 /* 캘린더 섹션 */
@@ -233,20 +417,29 @@ export default {
   flex: 1;
   min-width: 0;
   height: 100%;
-  overflow: hidden; /* 캘린더 자체 스크롤 방지 */
+  overflow: hidden; /* 데스크톱에서는 캘린더 자체 스크롤 방지 */
 }
 
-/* 사이드바 섹션 - 5단 구조 */
+/* 사이드바 섹션 */
 .sidebar-section {
   width: 320px;
   height: 100%;
+  position: relative;
+}
+
+/* 데스크톱 사이드바 */
+.desktop-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  height: 100%;
   overflow-y: auto;
   padding-right: 8px;
-  position: relative;
-  z-index: 100;
+}
+
+/* 모바일 사이드바 */
+.mobile-sidebar {
+  display: none;
 }
 
 /* 사이드바 카드 */
@@ -272,54 +465,6 @@ export default {
   color: #333;
   border-bottom: 2px solid #f0f0f0;
   padding-bottom: 6px;
-}
-
-/* 메뉴 카드 특별 스타일 */
-.menu-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 12px;
-  position: relative;
-  z-index: 1000;
-}
-
-/* 메뉴 버튼 컨테이너 */
-.menu-button-container {
-  position: relative;
-  z-index: 1001; /* 버튼 컨테이너도 높은 z-index */
-}
-
-.inline-menu-button {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 12px;
-  color: white;
-  padding: 12px 16px;
-  cursor: pointer;
-  font-size: 16px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
-}
-
-.inline-menu-button:hover {
-  background: rgba(255, 255, 255, 0.3);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-.menu-icon {
-  transform: rotate(90deg);
-  font-weight: bold;
-  font-size: 18px;
-}
-
-.menu-text {
-  font-size: 14px;
 }
 
 /* 공지사항 카드 특별 스타일 */
@@ -359,7 +504,7 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 120px;
+  max-height: 140px;
   overflow-y: auto;
 }
 
@@ -461,31 +606,68 @@ export default {
   transform: translateY(-1px);
 }
 
-/* 드롭다운 메뉴 */
-.dropdown-menu {
+/* 플로팅 메뉴 (PC/모바일 공통) */
+.floating-menu {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  z-index: 1000;
+}
+
+.floating-menu-button {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.floating-menu-button:hover {
+  transform: translateY(-3px) scale(1.1);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+}
+
+.floating-menu-button:active {
+  transform: translateY(-1px) scale(1.05);
+}
+
+.floating-menu-icon {
+  transform: rotate(90deg);
+  font-weight: bold;
+}
+
+/* 플로팅 드롭다운 메뉴 */
+.floating-dropdown-menu {
   position: absolute;
-  top: 100%;
-  left: 0;
+  bottom: 70px;
   right: 0;
-  margin-top: 8px;
   background: white;
   border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.3);
   overflow: hidden;
+  min-width: 220px;
   backdrop-filter: blur(10px);
-  z-index: 9999; /* 매우 높은 z-index로 설정 */
 }
 
 .dropdown-item {
-  padding: 12px 16px;
+  padding: 14px 18px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   cursor: pointer;
   transition: background 0.2s ease;
   border-bottom: 1px solid #f0f0f0;
   font-size: 14px;
   color: #333;
+  font-weight: 500;
 }
 
 .dropdown-item:last-child {
@@ -497,7 +679,7 @@ export default {
 }
 
 .dropdown-icon {
-  font-size: 16px;
+  font-size: 18px;
 }
 
 .dropdown-divider {
@@ -515,68 +697,242 @@ export default {
 .dropdown-enter-from,
 .dropdown-leave-to {
   opacity: 0;
-  transform: translateY(-10px) scale(0.95);
+  transform: translateY(10px) scale(0.9);
 }
 
-/* 반응형 디자인 */
-@media (max-width: 1024px) {
-  .sidebar-section {
-    width: 280px;
-  }
-}
-
+/* 모바일 반응형 디자인 */
 @media (max-width: 768px) {
-  .layout-container {
-    flex-direction: column;
-    overflow-y: auto;
+  .main-layout {
+    overflow-y: auto; /* 모바일에서는 스크롤 허용 */
     height: auto;
     min-height: 100vh;
   }
 
+  .layout-container {
+    flex-direction: column;
+    overflow-y: auto; /* 모바일에서는 스크롤 허용 */
+    height: auto;
+    min-height: 100vh;
+    padding: 10px;
+    gap: 10px;
+  }
+
   .calendar-section {
     height: 60vh;
-    overflow: visible;
+    overflow: visible; /* 모바일에서는 캘린더 스크롤 허용 */
+    order: 2; /* 캘린더를 두 번째로 */
   }
 
   .sidebar-section {
     width: 100%;
     height: auto;
-    flex-direction: row;
-    overflow-x: auto;
-    overflow-y: visible;
-    padding-bottom: 20px;
+    order: 1; /* 사이드바를 첫 번째로 */
   }
 
-  .sidebar-card {
-    min-width: 250px;
-    flex-shrink: 0;
+  /* 데스크톱 사이드바 숨김 */
+  .desktop-sidebar {
+    display: none;
   }
 
-  .menu-card {
+  /* 모바일 사이드바 표시 */
+  .mobile-sidebar {
+    display: block;
+  }
+
+  /* 모바일 상단 섹션 (공지사항 + 광고만) */
+  .mobile-top-section {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  /* 모바일 카드 (크기 최적화) */
+  .mobile-card {
+    flex: 1; /* 공지사항과 광고가 동일한 크기로 */
+    padding: 10px;
+    min-height: 120px;
+  }
+
+  .mobile-card h3 {
+    font-size: 11px;
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+  }
+
+  .mobile-card .notice-text {
+    font-size: 10px;
+    line-height: 1.2;
+  }
+
+  .mobile-card .notice-item {
+    padding: 6px;
+  }
+
+  .mobile-card .notice-date {
+    display: none; /* 모바일에서는 날짜 숨김 */
+  }
+
+  .mobile-card .ad-item {
+    padding: 8px;
+  }
+
+  .mobile-card .ad-item h4 {
+    font-size: 11px;
+    margin-bottom: 4px;
+  }
+
+  .mobile-card .ad-item p {
+    font-size: 9px;
+    margin-bottom: 6px;
+    line-height: 1.2;
+  }
+
+  .mobile-card .ad-button {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+
+  /* 플로팅 메뉴 모바일 최적화 */
+  .floating-menu {
+    bottom: 20px;
+    right: 20px;
+  }
+
+  .floating-menu-button {
+    width: 50px;
+    height: 50px;
+    font-size: 20px;
+  }
+
+  .floating-dropdown-menu {
+    bottom: 60px;
     min-width: 200px;
+  }
+
+  .dropdown-item {
+    padding: 12px 16px;
+    font-size: 13px;
+  }
+
+  .dropdown-icon {
+    font-size: 16px;
   }
 }
 
 /* 스크롤바 스타일 */
-.sidebar-section::-webkit-scrollbar,
+.desktop-sidebar::-webkit-scrollbar,
 .event-list::-webkit-scrollbar {
   width: 4px;
 }
 
-.sidebar-section::-webkit-scrollbar-track,
+.desktop-sidebar::-webkit-scrollbar-track,
 .event-list::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 2px;
 }
 
-.sidebar-section::-webkit-scrollbar-thumb,
+.desktop-sidebar::-webkit-scrollbar-thumb,
 .event-list::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.3);
   border-radius: 2px;
 }
 
-.sidebar-section::-webkit-scrollbar-thumb:hover,
+.desktop-sidebar::-webkit-scrollbar-thumb:hover,
 .event-list::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.5);
+}
+
+/* 사이드바 헤더 (새로고침 버튼 포함) */
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.sidebar-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.refresh-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.refresh-btn:hover {
+  background: #f0f0f0;
+}
+
+/* 로딩 상태 */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  gap: 8px;
+}
+
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #f0f0f0;
+  border-top: 2px solid #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+  font-size: 11px;
+  color: #666;
+}
+
+/* 에러 상태 */
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
+  gap: 6px;
+}
+
+.error-icon {
+  font-size: 16px;
+}
+
+.error-text {
+  font-size: 11px;
+  color: #dc3545;
+  text-align: center;
+  line-height: 1.3;
+}
+
+.retry-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.retry-btn:hover {
+  background: #c82333;
 }
 </style>

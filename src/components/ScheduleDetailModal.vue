@@ -1,11 +1,12 @@
 <template>
-  <div class="modal" :class="{ show: show }">
-    <div class="modal-content" @click.stop>
+  <div class="modal" :class="{ show: show }" @click.self="$emit('close')">
+    <div class="modal-content">
+      <!-- 모달 헤더 -->
       <div class="modal-header">
-        <h2 class="modal-title">📅 일정 상세</h2>
-        <button class="close-btn" @click="$emit('close')" type="button">
-          &times;
-        </button>
+        <h2 class="modal-title">
+          {{ selectedSchedules.length === 1 ? '일정 상세보기' : `${selectedSchedules.length}개의 일정` }}
+        </h2>
+        <button class="close-btn" @click="$emit('close')">&times;</button>
       </div>
 
       <!-- 단일 일정 상세보기 -->
@@ -13,95 +14,65 @@
         <div class="schedule-detail-card">
           <!-- 일정 헤더 -->
           <div class="schedule-header">
-            <h3 class="schedule-title">{{ selectedSchedules[0].title }}</h3>
+            <div class="schedule-title">{{ selectedSchedules[0].title }}</div>
             <div class="schedule-color-dot" :style="{ backgroundColor: selectedSchedules[0].color }"></div>
           </div>
 
           <!-- 일정 정보 -->
           <div class="schedule-info">
             <div class="info-item">
-              <div class="info-label">📅 기간</div>
-              <div class="info-value">{{ formatDateRange(selectedSchedules[0]) }}</div>
+              <span class="info-label">📅 기간</span>
+              <span class="info-value">{{ formatDateRange(selectedSchedules[0]) }}</span>
             </div>
 
-            <div class="info-item" v-if="selectedSchedules[0].startTime || selectedSchedules[0].endTime">
-              <div class="info-label">⏰ 시간</div>
-              <div class="info-value">
-                <span v-if="selectedSchedules[0].startTime && selectedSchedules[0].endTime">
-                  {{ selectedSchedules[0].startTime }} - {{ selectedSchedules[0].endTime }}
-                </span>
-                <span v-else-if="selectedSchedules[0].startTime">
-                  {{ selectedSchedules[0].startTime }}부터
-                </span>
-                <span v-else>
-                  {{ selectedSchedules[0].endTime }}까지
-                </span>
-              </div>
+            <div v-if="selectedSchedules[0].startTime" class="info-item">
+              <span class="info-label">⏰ 시간</span>
+              <span class="info-value">
+                {{ selectedSchedules[0].startTime }} - {{ selectedSchedules[0].endTime || '종료시간 미정' }}
+              </span>
             </div>
 
             <div class="info-item">
-              <div class="info-label">📊 우선순위</div>
-              <div class="info-value">
-                <span class="priority-badge" :class="getPriorityClass(selectedSchedules[0].priority)">
+              <span class="info-label">⭐ 우선순위</span>
+              <span class="info-value">
+                <span class="priority-badge" :class="`priority-${getPriorityClass(selectedSchedules[0].priority)}`">
                   {{ getPriorityText(selectedSchedules[0].priority) }}
                 </span>
-              </div>
+              </span>
             </div>
 
-            <div class="info-item" v-if="getDurationText(selectedSchedules[0])">
-              <div class="info-label">⏱️ 기간</div>
-              <div class="info-value">{{ getDurationText(selectedSchedules[0]) }}</div>
+            <div v-if="selectedSchedules[0].description" class="info-item">
+              <span class="info-label">📝 설명</span>
+              <span class="info-value description">{{ selectedSchedules[0].description }}</span>
             </div>
-
-            <div class="info-item" v-if="selectedSchedules[0].description">
-              <div class="info-label">📝 상세 내용</div>
-              <div class="info-value description">
-                {{ selectedSchedules[0].description }}
-              </div>
-            </div>
-          </div>
-
-          <!-- 액션 버튼들 -->
-          <div class="schedule-actions">
-            <button class="btn btn-primary" @click="$emit('edit', selectedSchedules[0])">
-              ✏️ 수정
-            </button>
-            <button class="btn btn-danger" @click="handleDelete(selectedSchedules[0])">
-              🗑️ 삭제
-            </button>
-            <button class="btn btn-secondary" @click="copyScheduleInfo">
-              📋 복사
-            </button>
           </div>
         </div>
       </div>
 
       <!-- 다중 일정 리스트 -->
-      <div v-else-if="selectedSchedules.length > 1" class="multiple-schedules">
+      <div v-else class="multiple-schedules">
         <div class="schedule-list-header">
-          <p>이 날짜에 {{ selectedSchedules.length }}개의 일정이 있습니다.</p>
-          <small>일정을 클릭하여 자세히 보세요.</small>
+          <p>{{ formatSelectedDate() }}의 일정</p>
+          <small>{{ selectedSchedules.length }}개의 일정이 있습니다</small>
         </div>
 
         <div class="schedule-list">
-          <div
-            v-for="(schedule, index) in sortedSchedules"
-            :key="schedule.id"
-            class="schedule-item"
-            :class="{ 'priority-high': schedule.priority === 1 }"
-            @click="$emit('view-single', schedule)">
+          <div v-for="(schedule, index) in sortedSchedules"
+               :key="schedule.id"
+               class="schedule-item"
+               @click="viewSingleSchedule(schedule)">
 
-            <!-- 우선순위 표시 -->
             <div class="item-priority">
-              <span class="priority-number">{{ index + 1 }}</span>
+              <div class="priority-number">{{ index + 1 }}</div>
               <div class="priority-color" :style="{ backgroundColor: schedule.color }"></div>
             </div>
 
-            <!-- 일정 정보 -->
             <div class="item-content">
               <div class="item-title">{{ schedule.title }}</div>
               <div class="item-meta">
-                <span class="item-time">{{ formatTimeOnly(schedule) }}</span>
+                <span v-if="schedule.startTime" class="item-time">
+                  {{ schedule.startTime }} - {{ schedule.endTime || '종료시간 미정' }}
+                </span>
                 <span class="item-priority-text">{{ getPriorityText(schedule.priority) }}</span>
               </div>
               <div v-if="schedule.description" class="item-description">
@@ -109,29 +80,17 @@
               </div>
             </div>
 
-            <!-- 화살표 -->
-            <div class="item-arrow">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12l-4.58 4.59z"/>
-              </svg>
-            </div>
+            <div class="item-arrow">▶</div>
           </div>
-        </div>
-
-        <!-- 전체 일정 액션 -->
-        <div class="list-actions">
-          <button class="btn btn-secondary" @click="exportAllSchedules">
-            📤 모든 일정 내보내기
-          </button>
         </div>
       </div>
 
-      <!-- 일정이 없는 경우 -->
-      <div v-else class="no-schedules">
+      <!-- 빈 상태 -->
+      <div v-if="selectedSchedules.length === 0" class="no-schedules">
         <div class="empty-state">
-          <div class="empty-icon">📭</div>
-          <h3>일정이 없습니다</h3>
-          <p>이 날짜에는 등록된 일정이 없습니다.</p>
+          <div class="empty-icon">📅</div>
+          <h3>선택된 일정이 없습니다</h3>
+          <p>일정을 선택해서 상세 정보를 확인하세요.</p>
         </div>
       </div>
     </div>
@@ -153,103 +112,57 @@ export default {
     }
   },
 
-  emits: ['edit', 'delete', 'view-single', 'close'],
+  emits: ['close'],
 
   computed: {
-    // 우선순위순으로 정렬된 일정 목록
     sortedSchedules() {
       return [...this.selectedSchedules].sort((a, b) => {
-        // 1차 정렬: 우선순위 (숫자가 작을수록 높은 우선순위)
+        // 우선순위순으로 정렬 (1=높음, 2=중간, 3=낮음)
         if (a.priority !== b.priority) {
           return a.priority - b.priority
         }
-
-        // 2차 정렬: 시작 시간 (시간이 있는 경우)
+        // 같은 우선순위면 시간순
         if (a.startTime && b.startTime) {
           return a.startTime.localeCompare(b.startTime)
         }
-
-        // 3차 정렬: 제목 알파벳순
-        return a.title.localeCompare(b.title)
+        return 0
       })
     }
   },
 
   methods: {
     /**
-     * 일정 삭제 확인
+     * 단일 일정 보기
      */
-    handleDelete(schedule) {
-      const isConfirmed = confirm(
-        `"${schedule.title}" 일정을 정말로 삭제하시겠습니까?\n\n` +
-        `삭제된 일정은 복구할 수 없습니다.`
-      )
-
-      if (isConfirmed) {
-        this.$emit('delete', schedule)
-      }
+    viewSingleSchedule(schedule) {
+      this.$emit('close')
+      // 잠시 후 단일 일정으로 다시 열기
+      setTimeout(() => {
+        this.$emit('view-single', schedule)
+      }, 300)
     },
 
     /**
-     * 모든 일정 데이터 내보내기
-     */
-    exportAllSchedules() {
-      const data = this.selectedSchedules.map(schedule => ({
-        title: schedule.title,
-        startDate: schedule.startDate,
-        endDate: schedule.endDate,
-        startTime: schedule.startTime || '',
-        endTime: schedule.endTime || '',
-        description: schedule.description || '',
-        priority: this.getPriorityText(schedule.priority)
-      }))
-
-      const jsonData = JSON.stringify(data, null, 2)
-      const blob = new Blob([jsonData], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `schedules-${new Date().toISOString().split('T')[0]}.json`
-      link.click()
-
-      URL.revokeObjectURL(url)
-    },
-
-    /**
-     * 날짜 범위 포맷팅
+     * 날짜 범위 형식 변환
      */
     formatDateRange(schedule) {
-      const start = new Date(schedule.startDate)
-      const end = new Date(schedule.endDate)
+      const start = new Date(schedule.startDate + 'T00:00:00')
+      const end = new Date(schedule.endDate + 'T00:00:00')
 
-      const startStr = start.toLocaleDateString('ko-KR', {
-        month: 'long',
-        day: 'numeric'
-      })
-
-      const endStr = end.toLocaleDateString('ko-KR', {
-        month: 'long',
-        day: 'numeric'
-      })
-
-      return schedule.startDate === schedule.endDate
-        ? startStr
-        : `${startStr} - ${endStr}`
+      if (schedule.startDate === schedule.endDate) {
+        return `${start.getMonth() + 1}월 ${start.getDate()}일`
+      } else {
+        return `${start.getMonth() + 1}월 ${start.getDate()}일 - ${end.getMonth() + 1}월 ${end.getDate()}일`
+      }
     },
 
     /**
-     * 시간만 포맷팅 (리스트용)
+     * 선택된 날짜 형식 변환
      */
-    formatTimeOnly(schedule) {
-      if (schedule.startTime && schedule.endTime) {
-        return `${schedule.startTime} - ${schedule.endTime}`
-      } else if (schedule.startTime) {
-        return `${schedule.startTime}부터`
-      } else if (schedule.endTime) {
-        return `${schedule.endTime}까지`
-      }
-      return '종일'
+    formatSelectedDate() {
+      if (this.selectedSchedules.length === 0) return ''
+      const date = new Date(this.selectedSchedules[0].startDate + 'T00:00:00')
+      return `${date.getMonth() + 1}월 ${date.getDate()}일`
     },
 
     /**
@@ -269,37 +182,18 @@ export default {
      */
     getPriorityClass(priority) {
       const classMap = {
-        1: 'priority-high',
-        2: 'priority-medium',
-        3: 'priority-low'
+        1: 'high',
+        2: 'medium',
+        3: 'low'
       }
-      return classMap[priority] || 'priority-medium'
+      return classMap[priority] || 'medium'
     },
 
     /**
-     * 일정 기간 계산
+     * 텍스트 자르기
      */
-    getDurationText(schedule) {
-      const start = new Date(schedule.startDate)
-      const end = new Date(schedule.endDate)
-      const diffTime = Math.abs(end - start)
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-
-      if (diffDays === 0) {
-        return '당일'
-      } else if (diffDays === 1) {
-        return '1일'
-      } else {
-        return `${diffDays + 1}일간`
-      }
-    },
-
-    /**
-     * 텍스트 말줄임표 처리
-     */
-    truncateText(text, maxLength) {
-      if (!text) return ''
-      return text.length > maxLength
+    truncateText(text, maxLength = 100) {
+      return text && text.length > maxLength
         ? text.substring(0, maxLength) + '...'
         : text
     }
@@ -506,15 +400,6 @@ export default {
   border: 1px solid #66bb6a;
 }
 
-/* 일정 액션 버튼들 */
-.schedule-actions {
-  padding: 20px;
-  background: #f8f9fa;
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-}
-
 /* 다중 일정 리스트 */
 .multiple-schedules {
   animation: fadeInUp 0.4s ease;
@@ -562,10 +447,6 @@ export default {
   border-color: #007bff;
   transform: translateX(5px);
   box-shadow: 0 2px 8px rgba(0, 123, 255, 0.1);
-}
-
-.schedule-item.priority-high {
-  border-left: 4px solid #dc3545;
 }
 
 /* 아이템 우선순위 표시 */
@@ -646,12 +527,6 @@ export default {
   transform: translateX(3px);
 }
 
-/* 리스트 액션 */
-.list-actions {
-  margin-top: 20px;
-  text-align: center;
-}
-
 /* 빈 상태 */
 .no-schedules {
   text-align: center;
@@ -676,64 +551,12 @@ export default {
   color: #666;
 }
 
-/* 버튼 스타일 */
-.btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  transition: all 0.3s ease;
-  text-decoration: none;
-  display: inline-block;
-}
-
-.btn-primary {
-  background: #007bff;
-  color: white;
-}
-
-.btn-primary:hover {
-  background: #0056b3;
-  transform: translateY(-2px);
-}
-
-.btn-danger {
-  background: #dc3545;
-  color: white;
-}
-
-.btn-danger:hover {
-  background: #c82333;
-  transform: translateY(-2px);
-}
-
-.btn-secondary {
-  background: #6c757d;
-  color: white;
-}
-
-.btn-secondary:hover {
-  background: #545b62;
-  transform: translateY(-2px);
-}
-
 /* 반응형 디자인 */
 @media (max-width: 768px) {
   .modal-content {
     width: 95%;
     margin: 10px;
     padding: 20px;
-  }
-
-  .schedule-actions {
-    flex-direction: column;
-  }
-
-  .btn {
-    width: 100%;
-    margin-bottom: 5px;
   }
 
   .info-item {

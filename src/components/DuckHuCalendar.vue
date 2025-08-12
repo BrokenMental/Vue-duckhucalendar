@@ -2,26 +2,46 @@
   <div class="duckhu-calendar">
     <!-- 캘린더 헤더 -->
     <div class="calendar-header">
-      <button class="nav-button" @click="previousMonth">◀ 이전</button>
+      <!-- 데스크톱 버전 헤더 -->
+      <div class="desktop-header">
+        <button class="nav-button" @click="previousMonth">◀ 이전</button>
 
-      <div class="month-year-selector">
-        <select v-model="selectedYear">
-          <option v-for="year in availableYears" :key="year" :value="year">
-            {{ year }}년
-          </option>
-        </select>
-        <select v-model="selectedMonth">
-          <option v-for="(month, index) in months" :key="index" :value="index">
-            {{ month }}
-          </option>
-        </select>
+        <div class="month-year-selector">
+          <select v-model="selectedYear">
+            <option v-for="year in availableYears" :key="year" :value="year">
+              {{ year }}년
+            </option>
+          </select>
+          <select v-model="selectedMonth">
+            <option v-for="(month, index) in months" :key="index" :value="index">
+              {{ month }}
+            </option>
+          </select>
+        </div>
+
+        <button class="nav-button" @click="nextMonth">다음 ▶</button>
       </div>
 
-      <button class="add-schedule-btn" @click="openDuckHuScheduleModal">
-        일정 추가
-      </button>
+      <!-- 모바일 버전 헤더 -->
+      <div class="mobile-header">
+        <div class="mobile-nav-row">
+          <button class="mobile-nav-button" @click="previousMonth">◀ 이전</button>
 
-      <button class="nav-button" @click="nextMonth">다음 ▶</button>
+          <select v-model="selectedYear" class="mobile-select">
+            <option v-for="year in availableYears" :key="year" :value="year">
+              {{ year }}년
+            </option>
+          </select>
+
+          <select v-model="selectedMonth" class="mobile-select">
+            <option v-for="(month, index) in months" :key="index" :value="index">
+              {{ month }}
+            </option>
+          </select>
+
+          <button class="mobile-nav-button" @click="nextMonth">다음 ▶</button>
+        </div>
+      </div>
     </div>
 
     <!-- 캘린더 컨테이너 -->
@@ -44,8 +64,8 @@
                    'other-month': !day.isCurrentMonth,
                    'today': day.isToday,
                    'weekend': dayIndex === 0 || dayIndex === 6
-                 }"
-                 @click="selectDuckHuDate(day)">
+                 }">
+              <!-- 일정 추가 클릭 이벤트 제거 -->
               <div class="date-number">{{ day.date }}</div>
 
               <!-- 일정 개수 표시 (4개 이상일 때) -->
@@ -88,20 +108,10 @@
       </div>
     </div>
 
-    <!-- 일정 추가/수정 모달 -->
-    <ScheduleModal
-      :show="showDuckHuScheduleModal"
-      :editing-schedule="editingDuckHuSchedule"
-      @save="handleSaveDuckHuSchedule"
-      @close="closeDuckHuScheduleModal"
-    />
-
-    <!-- 일정 상세보기 모달 -->
+    <!-- 일정 상세보기 모달만 유지 (추가/수정 모달 제거) -->
     <ScheduleDetailModal
       :show="showDuckHuDetailModal"
       :selected-schedules="selectedDuckHuSchedules"
-      @edit="editDuckHuSchedule"
-      @delete="deleteDuckHuSchedule"
       @close="closeDuckHuDetailModal"
     />
 
@@ -117,25 +127,24 @@
 </template>
 
 <script>
-import ScheduleModal from '@/components/ScheduleModal.vue'
 import ScheduleDetailModal from '@/components/ScheduleDetailModal.vue'
+import { scheduleAPI } from '@/services/api.js'
 
 export default {
   name: 'DuckHuCalendar',
 
   components: {
-    ScheduleModal,
     ScheduleDetailModal
   },
 
   data() {
     return {
       // DuckHu 캘린더 설정
-      DUCKHU_CELL_HEIGHT: 120, // 각 주의 높이 (px)
-      DUCKHU_CELL_WIDTH: 0,    // 각 날짜 셀의 너비 (계산됨)
-      DUCKHU_EVENT_HEIGHT: 20, // 이벤트 바의 높이
-      DUCKHU_EVENT_MARGIN: 2,  // 이벤트 바 간격
-      DUCKHU_MAX_EVENTS_PER_ROW: 4, // 한 주에 표시할 수 있는 최대 이벤트 수
+      DUCKHU_CELL_HEIGHT: 120,
+      DUCKHU_CELL_WIDTH: 0,
+      DUCKHU_EVENT_HEIGHT: 20,
+      DUCKHU_EVENT_MARGIN: 2,
+      DUCKHU_MAX_EVENTS_PER_ROW: 4,
 
       // 날짜 관련
       currentDate: new Date(),
@@ -146,18 +155,16 @@ export default {
         '7월', '8월', '9월', '10월', '11월', '12월'
       ],
       weekdays: ['일', '월', '화', '수', '목', '금', '토'],
-      duckHuCalendarWeeks: [], // 주별로 구성된 캘린더 데이터
+      duckHuCalendarWeeks: [],
 
-      // 일정 관련
-      duckHuSchedules: [], // 전체 일정 배열
-      duckHuScheduleIdCounter: 1,
+      // 일정 관련 (API 연동)
+      duckHuSchedules: [],
+      loading: false,
+      error: null,
 
       // 모달 상태
-      showDuckHuScheduleModal: false,
       showDuckHuDetailModal: false,
-      editingDuckHuSchedule: null,
       selectedDuckHuSchedules: [],
-      selectedDuckHuDate: null,
 
       // 툴팁
       duckHuTooltip: {
@@ -167,16 +174,8 @@ export default {
         schedule: null
       },
 
-      // 색상 관리
-      duckHuColors: [
-        '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
-        '#DDA0DD', '#F4A460', '#87CEEB', '#98D8C8', '#FFB6C1',
-        '#FFA07A', '#20B2AA', '#9370DB', '#3CB371', '#FF7F50'
-      ],
-      duckHuUsedColors: new Set(),
-
       // 알림 관리
-      duckHuNotificationTimers: [] // 알림 타이머들을 저장하는 배열
+      duckHuNotificationTimers: []
     }
   },
 
@@ -194,34 +193,27 @@ export default {
   watch: {
     selectedYear() {
       this.generateDuckHuCalendar()
+      this.loadDuckHuSchedules() // 연도 변경 시 일정 다시 로드
     },
     selectedMonth() {
       this.generateDuckHuCalendar()
-    },
-    duckHuSchedules: {
-      handler() {
-        this.saveDuckHuSchedules()
-        this.scheduleDuckHuNotifications() // 일정 변경 시 알림 재설정
-      },
-      deep: true
+      this.loadDuckHuSchedules() // 월 변경 시 일정 다시 로드
     }
   },
 
-  mounted() {
+  async mounted() {
     this.generateDuckHuCalendar()
-    this.loadDuckHuSchedules()
+    await this.loadDuckHuSchedules()
     this.calculateDuckHuCellWidth()
-    this.setupDuckHuNotifications() // 알림 권한 요청
-    this.scheduleDuckHuNotifications() // 알림 스케줄링
+    this.setupDuckHuNotifications()
+    this.scheduleDuckHuNotifications()
 
-    // 창 크기 변경 시 셀 너비 재계산
     window.addEventListener('resize', this.calculateDuckHuCellWidth)
   },
 
   beforeUnmount() {
     window.removeEventListener('resize', this.calculateDuckHuCellWidth)
 
-    // 알림 타이머들 정리
     if (this.duckHuNotificationTimers) {
       this.duckHuNotificationTimers.forEach(timer => clearTimeout(timer))
     }
@@ -235,19 +227,15 @@ export default {
       const year = this.selectedYear
       const month = this.selectedMonth
 
-      // 해당 월의 첫째 날과 마지막 날
       const firstDay = new Date(year, month, 1)
       const lastDay = new Date(year, month + 1, 0)
 
-      // 캘린더 시작일 (첫 주의 일요일)
       const startDate = new Date(firstDay)
       startDate.setDate(startDate.getDate() - firstDay.getDay())
 
-      // 캘린더 종료일 (마지막 주의 토요일)
       const endDate = new Date(lastDay)
       endDate.setDate(endDate.getDate() + (6 - lastDay.getDay()))
 
-      // 주별로 날짜 구성
       const weeks = []
       let currentWeekStart = new Date(startDate)
 
@@ -285,6 +273,50 @@ export default {
     },
 
     /**
+     * DuckHu 일정 로드 (API 연동)
+     */
+    async loadDuckHuSchedules() {
+      this.loading = true
+      this.error = null
+
+      try {
+        // 현재 월의 시작일과 끝일 계산
+        const startDate = new Date(this.selectedYear, this.selectedMonth, 1)
+        const endDate = new Date(this.selectedYear, this.selectedMonth + 1, 0)
+
+        // 캘린더 그리드 범위로 확장 (이전/다음 월 일부 포함)
+        const calendarStart = new Date(startDate)
+        calendarStart.setDate(calendarStart.getDate() - startDate.getDay())
+
+        const calendarEnd = new Date(endDate)
+        calendarEnd.setDate(calendarEnd.getDate() + (6 - endDate.getDay()))
+
+        // API 호출
+        const response = await scheduleAPI.getSchedulesByDateRange({
+          startDate: this.formatDuckHuDate(calendarStart),
+          endDate: this.formatDuckHuDate(calendarEnd)
+        })
+
+        // 응답 데이터 처리
+        this.duckHuSchedules = response.schedules || response || []
+
+        console.log(`✅ ${this.duckHuSchedules.length}개의 일정을 로드했습니다.`)
+
+        // 알림 재설정
+        this.scheduleDuckHuNotifications()
+
+      } catch (error) {
+        console.error('❌ 일정 로드 실패:', error)
+        this.error = '일정을 불러오는데 실패했습니다.'
+
+        // 에러 시 빈 배열로 설정
+        this.duckHuSchedules = []
+      } finally {
+        this.loading = false
+      }
+    },
+
+    /**
      * 특정 날짜의 일정 개수 반환
      */
     getDuckHuScheduleCountForDay(date) {
@@ -315,20 +347,17 @@ export default {
       const weekEnd = week[6].fullDate
       const events = []
 
-      // 해당 주와 겹치는 일정들 찾기
       const overlappingSchedules = this.duckHuSchedules.filter(schedule => {
         return schedule.startDate <= weekEnd && schedule.endDate >= weekStart
       })
 
-      // 우선순위별로 정렬 (우선순위가 높을수록 위에 표시)
       overlappingSchedules.sort((a, b) => {
         if (a.priority !== b.priority) {
-          return a.priority - b.priority // 1(높음) -> 2(중간) -> 3(낮음) 순서
+          return a.priority - b.priority
         }
-        return a.startDate.localeCompare(b.startDate) // 같은 우선순위면 시작일순
+        return a.startDate.localeCompare(b.startDate)
       })
 
-      // 각 일정을 이벤트 객체로 변환
       overlappingSchedules.forEach((schedule, index) => {
         const eventStartDate = schedule.startDate > weekStart ? schedule.startDate : weekStart
         const eventEndDate = schedule.endDate < weekEnd ? schedule.endDate : weekEnd
@@ -345,7 +374,7 @@ export default {
             isStart: schedule.startDate === eventStartDate,
             isEnd: schedule.endDate === eventEndDate,
             showTitle: schedule.startDate === eventStartDate || startDayIndex === 0,
-            row: Math.min(index, this.DUCKHU_MAX_EVENTS_PER_ROW - 1) // 최대 행 수 제한
+            row: Math.min(index, this.DUCKHU_MAX_EVENTS_PER_ROW - 1)
           })
         }
       })
@@ -368,7 +397,6 @@ export default {
       let backgroundImage = 'none'
       let animation = 'none'
 
-      // 4개 이상일 때 무지개 색상
       if (eventCount >= 4) {
         backgroundColor = 'transparent'
         backgroundImage = 'linear-gradient(90deg, #ff0000, #ff8000, #ffff00, #80ff00, #00ff00, #00ff80, #00ffff, #0080ff, #0000ff, #8000ff, #ff00ff, #ff0080)'
@@ -455,77 +483,6 @@ export default {
     },
 
     /**
-     * DuckHu 날짜 선택
-     */
-    selectDuckHuDate(day) {
-      this.selectedDuckHuDate = day.fullDate
-      this.openDuckHuScheduleModal()
-    },
-
-    /**
-     * DuckHu 일정 추가 모달 열기
-     */
-    openDuckHuScheduleModal() {
-      this.editingDuckHuSchedule = null
-      this.showDuckHuScheduleModal = true
-    },
-
-    /**
-     * DuckHu 일정 모달 닫기
-     */
-    closeDuckHuScheduleModal() {
-      this.showDuckHuScheduleModal = false
-      this.editingDuckHuSchedule = null
-      this.selectedDuckHuDate = null
-    },
-
-    /**
-     * DuckHu 일정 저장 처리
-     */
-    handleSaveDuckHuSchedule(scheduleData) {
-      if (this.editingDuckHuSchedule) {
-        // 수정
-        const index = this.duckHuSchedules.findIndex(s => s.id === this.editingDuckHuSchedule.id)
-        if (index !== -1) {
-          this.duckHuSchedules[index] = { ...scheduleData, id: this.editingDuckHuSchedule.id }
-        }
-      } else {
-        // 신규 추가
-        const newSchedule = {
-          ...scheduleData,
-          id: this.duckHuScheduleIdCounter++,
-          color: this.getDuckHuUniqueColor()
-        }
-
-        // 선택된 날짜가 있으면 기본값으로 설정
-        if (this.selectedDuckHuDate && !scheduleData.startDate) {
-          newSchedule.startDate = this.selectedDuckHuDate
-          newSchedule.endDate = this.selectedDuckHuDate
-        }
-
-        this.duckHuSchedules.push(newSchedule)
-      }
-
-      this.closeDuckHuScheduleModal()
-    },
-
-    /**
-     * DuckHu 고유 색상 할당
-     */
-    getDuckHuUniqueColor() {
-      const availableColors = this.duckHuColors.filter(color => !this.duckHuUsedColors.has(color))
-
-      if (availableColors.length > 0) {
-        const selectedColor = availableColors[0]
-        this.duckHuUsedColors.add(selectedColor)
-        return selectedColor
-      } else {
-        // 모든 색상이 사용된 경우 랜덤 선택
-        return this.duckHuColors[Math.floor(Math.random() * this.duckHuColors.length)]
-      }
-    },
-
-    /**
      * DuckHu 일정 상세보기
      */
     openDuckHuScheduleDetail(schedule) {
@@ -539,28 +496,6 @@ export default {
     closeDuckHuDetailModal() {
       this.showDuckHuDetailModal = false
       this.selectedDuckHuSchedules = []
-    },
-
-    /**
-     * DuckHu 일정 수정
-     */
-    editDuckHuSchedule(schedule) {
-      this.editingDuckHuSchedule = schedule
-      this.closeDuckHuDetailModal()
-      this.showDuckHuScheduleModal = true
-    },
-
-    /**
-     * DuckHu 일정 삭제
-     */
-    deleteDuckHuSchedule(schedule) {
-      const index = this.duckHuSchedules.findIndex(s => s.id === schedule.id)
-      if (index !== -1) {
-        // 사용된 색상에서 제거
-        this.duckHuUsedColors.delete(schedule.color)
-        this.duckHuSchedules.splice(index, 1)
-      }
-      this.closeDuckHuDetailModal()
     },
 
     /**
@@ -599,7 +534,6 @@ export default {
      * DuckHu 일정 알림 스케줄링
      */
     scheduleDuckHuNotifications() {
-      // 기존 타이머들 클리어
       if (this.duckHuNotificationTimers) {
         this.duckHuNotificationTimers.forEach(timer => clearTimeout(timer))
       }
@@ -610,7 +544,6 @@ export default {
       this.duckHuSchedules.forEach(schedule => {
         let notificationTime
 
-        // 시작 시간이 있으면 해당 시간에, 없으면 오전 9시에 알림
         if (schedule.startTime) {
           const [hours, minutes] = schedule.startTime.split(':')
           notificationTime = new Date(schedule.startDate + `T${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}:00`)
@@ -618,7 +551,6 @@ export default {
           notificationTime = new Date(schedule.startDate + 'T09:00:00')
         }
 
-        // 알림 시간이 현재보다 미래인 경우에만 스케줄링
         if (notificationTime > now) {
           const delay = notificationTime.getTime() - now.getTime()
 
@@ -646,7 +578,6 @@ export default {
           requireInteraction: true
         })
 
-        // 알림 클릭 시 상세보기 모달 열기
         notification.onclick = () => {
           window.focus()
           this.selectedDuckHuSchedules = [schedule]
@@ -654,93 +585,9 @@ export default {
           notification.close()
         }
 
-        // 10초 후 자동으로 알림 닫기
         setTimeout(() => {
           notification.close()
         }, 10000)
-      }
-    },
-
-    /**
-     * DuckHu 일정 저장 (로컬 스토리지)
-     */
-    saveDuckHuSchedules() {
-      try {
-        localStorage.setItem('duckhu-calendar-schedules', JSON.stringify(this.duckHuSchedules))
-        localStorage.setItem('duckhu-calendar-used-colors', JSON.stringify([...this.duckHuUsedColors]))
-        localStorage.setItem('duckhu-calendar-id-counter', this.duckHuScheduleIdCounter.toString())
-        console.log('DuckHu 캘린더 일정이 저장되었습니다.')
-      } catch (error) {
-        console.error('DuckHu 캘린더 일정 저장 실패:', error)
-      }
-    },
-    /**
-     * 테스트용 샘플 데이터 추가
-     */
-    addSampleData() {
-      const today = new Date()
-      const tomorrow = new Date(today)
-      tomorrow.setDate(tomorrow.getDate() + 1)
-      const dayAfterTomorrow = new Date(today)
-      dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 3)
-
-      this.duckHuSchedules = [
-        {
-          id: 1,
-          title: '프로젝트 회의',
-          startDate: this.formatDuckHuDate(today),
-          endDate: this.formatDuckHuDate(tomorrow),
-          startTime: '10:00',
-          endTime: '12:00',
-          description: '새로운 프로젝트에 대한 회의입니다.',
-          priority: 1,
-          color: '#FF6B6B'
-        },
-        {
-          id: 2,
-          title: '휴가',
-          startDate: this.formatDuckHuDate(tomorrow),
-          endDate: this.formatDuckHuDate(dayAfterTomorrow),
-          startTime: null,
-          endTime: null,
-          description: '여름휴가입니다.',
-          priority: 2,
-          color: '#4ECDC4'
-        }
-      ]
-
-      this.duckHuUsedColors.add('#FF6B6B')
-      this.duckHuUsedColors.add('#4ECDC4')
-      this.duckHuScheduleIdCounter = 3
-    },
-
-    /**
-     * DuckHu 일정 불러오기 (로컬 스토리지)
-     */
-    loadDuckHuSchedules() {
-      try {
-        const savedSchedules = localStorage.getItem('duckhu-calendar-schedules')
-        const savedColors = localStorage.getItem('duckhu-calendar-used-colors')
-        const savedCounter = localStorage.getItem('duckhu-calendar-id-counter')
-
-        if (savedSchedules) {
-          this.duckHuSchedules = JSON.parse(savedSchedules)
-        } else {
-          // 테스트용 샘플 데이터 추가
-          this.addSampleData()
-        }
-
-        if (savedColors) {
-          this.duckHuUsedColors = new Set(JSON.parse(savedColors))
-        }
-
-        if (savedCounter) {
-          this.duckHuScheduleIdCounter = parseInt(savedCounter)
-        }
-
-        console.log('DuckHu 캘린더 일정이 불러와졌습니다.')
-      } catch (error) {
-        console.error('DuckHu 캘린더 일정 불러오기 실패:', error)
       }
     }
   }
@@ -762,11 +609,86 @@ export default {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 데스크톱 헤더 */
+.desktop-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
   gap: 15px;
+}
+
+/* 모바일 헤더 */
+.mobile-header {
+  display: none;
+}.mobile-nav-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mobile-nav-button {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.mobile-nav-button:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.mobile-select {
+  padding: 8px 10px;
+  border: none;
+  border-radius: 5px;
+  background: white;
+  font-size: 14px;
+  cursor: pointer;
+  flex: 1;
+  min-width: 80px;
+}
+
+/* 기존 네비게이션 버튼 스타일 유지 */
+.nav-button {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.3s ease;
+  min-width: 80px;
+}
+
+.nav-button:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.month-year-selector {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.month-year-selector select {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 5px;
+  background: white;
+  font-size: 16px;
+  cursor: pointer;
 }
 
 .nav-button {
@@ -1041,6 +963,38 @@ export default {
   .calendar-header {
     flex-direction: column;
     gap: 10px;
+  }
+  .desktop-header {
+    display: none;
+  }
+
+  .mobile-header {
+    display: block;
+  }
+
+  .calendar-header {
+    padding: 15px;
+  }
+
+  .date-cell {
+    height: 80px;
+    padding: 4px;
+  }
+
+  .event-bar {
+    font-size: 10px;
+    height: 16px;
+  }
+
+  .event-count-badge {
+    width: 16px;
+    height: 16px;
+    font-size: 9px;
+  }
+
+  .duckhu-calendar {
+    margin: 10px;
+    border-radius: 8px;
   }
 
   .month-year-selector {
