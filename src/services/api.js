@@ -6,7 +6,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api'
 // Axios 인스턴스 생성
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000, // 15초 타임아웃
+  timeout: 10000,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -333,16 +333,25 @@ export const scheduleAPI = {
   },
 
   /**
-   * 날짜 범위별 일정 조회
-   * @param {string} startDate - 시작 날짜
-   * @param {string} endDate - 종료 날짜
+   * 날짜 범위로 일정 조회
+   * @param {Object} params - 파라미터 객체
+   * @param {string} params.startDate - 시작 날짜 (YYYY-MM-DD)
+   * @param {string} params.endDate - 종료 날짜 (YYYY-MM-DD)
    */
-  async getSchedulesByDateRange(startDate, endDate) {
+  async getSchedulesByDateRange(params) {
     try {
-      const response = await apiClient.get(`/schedules/range?start=${startDate}&end=${endDate}`)
+      console.log('API 호출 파라미터:', params) // 디버깅용
+
+      const response = await apiClient.get('/schedules/range', {
+        params: {
+          start: params.startDate,
+          end: params.endDate
+        }
+      })
       return response.data
     } catch (error) {
-      throw new Error(error.userMessage || '기간별 일정을 불러오는데 실패했습니다.')
+      console.error('날짜 범위 일정 조회 실패:', error)
+      throw new Error(error.userMessage || '일정을 불러오는데 실패했습니다.')
     }
   },
 

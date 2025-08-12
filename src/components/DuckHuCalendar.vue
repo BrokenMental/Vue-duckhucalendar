@@ -291,10 +291,16 @@ export default {
         const calendarEnd = new Date(endDate)
         calendarEnd.setDate(calendarEnd.getDate() + (6 - endDate.getDay()))
 
-        // API 호출
+        // 날짜를 문자열로 변환
+        const startDateStr = this.formatDuckHuDate(calendarStart)
+        const endDateStr = this.formatDuckHuDate(calendarEnd)
+
+        console.log('DuckHu 캘린더 날짜 범위:', startDateStr, '~', endDateStr)
+
+        // API 호출 - 파라미터 구조 수정
         const response = await scheduleAPI.getSchedulesByDateRange({
-          startDate: this.formatDuckHuDate(calendarStart),
-          endDate: this.formatDuckHuDate(calendarEnd)
+          startDate: startDateStr,
+          endDate: endDateStr
         })
 
         // 응답 데이터 처리
@@ -391,7 +397,7 @@ export default {
 
       const left = event.startDayIndex * (100 / 7)
       const width = (event.endDayIndex - event.startDayIndex + 1) * (100 / 7)
-      const top = 25 + (event.row * (this.DUCKHU_EVENT_HEIGHT + this.DUCKHU_EVENT_MARGIN))
+      const top = 30 + (event.row * (this.DUCKHU_EVENT_HEIGHT + this.DUCKHU_EVENT_MARGIN))
 
       let backgroundColor = event.schedule.color
       let backgroundImage = 'none'

@@ -222,14 +222,20 @@ export default {
         const nextMonth = new Date(today)
         nextMonth.setMonth(nextMonth.getMonth() + 1)
 
+        // 날짜를 문자열로 변환
+        const startDateStr = this.formatDate(today)
+        const endDateStr = this.formatDate(nextMonth)
+
+        console.log('다가올 이벤트 날짜 범위:', startDateStr, '~', endDateStr)
+
         const response = await scheduleAPI.getSchedulesByDateRange({
-          startDate: this.formatDate(today),
-          endDate: this.formatDate(nextMonth)
+          startDate: startDateStr,
+          endDate: endDateStr
         })
 
         // 오늘 이후의 일정만 필터링하고 시작일순 정렬
         this.upcomingEvents = (response.schedules || response || [])
-          .filter(schedule => schedule.startDate >= this.formatDate(today))
+          .filter(schedule => schedule.startDate >= startDateStr)
           .sort((a, b) => {
             // 시작일순 정렬
             const dateCompare = a.startDate.localeCompare(b.startDate)
@@ -261,8 +267,29 @@ export default {
      */
     async loadRecentEvents() {
       try {
-        // 최근 생성된 일정 조회
-        const response = await scheduleAPI.getRecentSchedules(5)
+        // 최근 생성된 일정 조회 API가 있는지 확인
+        let response
+        try {
+          response = await scheduleAPI.getRecentSchedules(5)
+        // eslint-disable-next-line no-unused-vars
+        } catch (recentApiError) {
+          console.log('최신 일정 API 없음, 대체 방법 사용')
+
+          // 최신 일정 API가 없는 경우 최근 1개월 데이터에서 추출
+          const today = new Date()
+          const oneMonthAgo = new Date(today)
+          oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1)
+
+          const startDateStr = this.formatDate(oneMonthAgo)
+          const endDateStr = this.formatDate(today)
+
+          console.log('최신 이벤트 대체 날짜 범위:', startDateStr, '~', endDateStr)
+
+          response = await scheduleAPI.getSchedulesByDateRange({
+            startDate: startDateStr,
+            endDate: endDateStr
+          })
+        }
 
         this.recentEvents = (response.schedules || response || [])
           .sort((a, b) => {
@@ -271,34 +298,12 @@ export default {
             const createdAtB = new Date(b.createdAt || b.startDate)
             return createdAtB - createdAtA
           })
+          .slice(0, 3) // 최대 3개까지만
 
         console.log(`✨ 최신 이벤트 ${this.recentEvents.length}개 로드`)
       } catch (error) {
         console.error('최신 이벤트 로드 실패:', error)
-
-        // 최신 일정 API가 없는 경우 전체 일정에서 최근 것 추출
-        try {
-          const today = new Date()
-          const oneWeekAgo = new Date(today)
-          oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
-
-          const response = await scheduleAPI.getSchedulesByDateRange({
-            startDate: this.formatDate(oneWeekAgo),
-            endDate: this.formatDate(today)
-          })
-
-          this.recentEvents = (response.schedules || response || [])
-            .sort((a, b) => {
-              const createdAtA = new Date(a.createdAt || a.startDate)
-              const createdAtB = new Date(b.createdAt || b.startDate)
-              return createdAtB - createdAtA
-            })
-            .slice(0, 3)
-
-        } catch (fallbackError) {
-          console.error('최신 이벤트 대체 로드도 실패:', fallbackError)
-          this.recentEvents = []
-        }
+        this.recentEvents = []
       }
     },
 
