@@ -1,20 +1,19 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import MainLayout from '@/components/MainLayout.vue'
+import CalendarView from '@/views/CalendarView.vue'
 import SettingsView from '@/views/SettingsView.vue'
 import AdminView from '@/views/AdminView.vue'
 
 /**
  * 라우트 정의
- * MainLayout을 메인 페이지로 사용하고 관리자 페이지 추가
  */
 const routes = [
   {
     path: '/',
     name: 'Home',
-    component: MainLayout,
+    component: CalendarView,
     meta: {
-      title: '이벤트 캘린더',
-      description: '이벤트를 관리하는 캘린더 메인 페이지입니다',
+      title: '더쿠 캘린더',
+      description: '더쿠 캘린더로 일정을 확인하세요',
       requiresAuth: false
     }
   },
@@ -35,7 +34,7 @@ const routes = [
     meta: {
       title: '관리자',
       description: '이벤트 관리 및 관리자 전용 기능 페이지입니다',
-      requiresAuth: true, // 관리자 인증 필요
+      requiresAuth: true,
       adminOnly: true
     }
   },
@@ -48,6 +47,11 @@ const routes = [
       description: '관리자 로그인 페이지입니다',
       requiresAuth: false
     }
+  },
+  // 기존 MainLayout으로의 리다이렉트 (호환성 유지)
+  {
+    path: '/main',
+    redirect: '/'
   },
   // 기존 캘린더 뷰로 리다이렉트 (호환성 유지)
   {
