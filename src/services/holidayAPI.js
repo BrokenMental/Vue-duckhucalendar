@@ -5,7 +5,7 @@ const API_BASE_URL = import.meta.env.VUE_APP_API_URL || 'http://localhost:8080'
 
 // Axios 인스턴스 생성
 const holidayAxios = axios.create({
-  baseURL: `${API_BASE_URL}/holidays`,
+  baseURL: `${API_BASE_URL}/api/holidays`,
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json'
@@ -142,18 +142,29 @@ export const holidayAPI = {
         params: { countryCode }
       })
 
-      let holidays = response.data || []
+      // 응답 데이터 안전하게 추출
+      const responseData = response.data || {}
+      let holidays = responseData.holidays || []
+      const count = responseData.count || holidays.length || 0
 
-      // 공휴일이 적으면 공공데이터 동기화 시도
-      if (holidays.length < 5 && countryCode === 'KR') {
-        console.log(`${year}년 공휴일이 부족합니다. 공공데이터 동기화를 시도합니다.`)
-        await this.syncHolidaysFromPublicAPI(year)
+      console.log(`✅ ${year}년 공휴일 ${count}개 조회 성공`)
 
-        // 동기화 후 다시 조회
-        const retryResponse = await holidayAxios.get(`/year/${year}`, {
-          params: { countryCode }
-        })
-        holidays = retryResponse.data || holidays
+      // 공휴일이 적으면 관리자 권한으로 동기화 시도 (하지만 실패해도 무시)
+      if (count < 5 && countryCode === 'KR') {
+        console.log(`${year}년 공휴일이 부족합니다. 관리자 동기화를 시도해봅니다.`)
+        try {
+          await this.syncHolidaysFromPublicAPI(year)
+          // 동기화 성공 시 다시 조회
+          const retryResponse = await holidayAxios.get(`/year/${year}`, {
+            params: { countryCode }
+          })
+          const retryData = retryResponse.data || {}
+          holidays = retryData.holidays || holidays
+        // eslint-disable-next-line no-unused-vars
+        } catch (syncError) {
+          console.warn(`${year}년 관리자 동기화 실패 (권한 없음). 기본 데이터를 사용합니다.`)
+          // 동기화 실패해도 기존 데이터 사용
+        }
       }
 
       // 캐시 저장
@@ -162,7 +173,6 @@ export const holidayAPI = {
         timestamp: Date.now()
       })
 
-      console.log(`✅ ${year}년 공휴일 ${holidays.length}개 조회 성공`)
       return holidays
 
     } catch (error) {

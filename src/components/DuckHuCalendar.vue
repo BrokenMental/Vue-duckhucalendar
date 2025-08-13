@@ -120,8 +120,13 @@
               @mouseenter="showDuckHuEventTooltip(event.schedule, $event)"
               @mouseleave="hideDuckHuTooltip"
             >
-              <span v-if="event.isStart" class="event-time">{{ event.schedule.startTime || '' }}</span>
-              <span v-else-if="event.showTitle" class="event-title">{{ event.schedule.title }}</span>
+              <!-- 시작 부분이면 시간과 제목을 모두 표시 -->
+              <span v-if="event.isStart" class="event-content">
+                <span v-if="event.schedule.startTime" class="event-time">{{ event.schedule.startTime }}</span>
+                <span class="event-title" :class="{ 'with-time': event.schedule.startTime }">{{ event.schedule.title }}</span>
+              </span>
+              <!-- 중간 부분이면 제목만 표시 -->
+              <span v-else class="event-title">{{ event.schedule.title }}</span>
             </div>
           </div>
         </div>
@@ -554,6 +559,7 @@ export default {
       let backgroundColor = event.schedule.color || '#3498db'
       let animation = 'none'
 
+      // 우선순위가 높은 일정은 시각적으로 강조
       if (event.schedule.priority === 1) {
         backgroundColor = 'linear-gradient(45deg, #ff6b6b, #ff8e53, #ff6b6b, #ff8e53)'
         animation = 'shimmer 2s ease-in-out infinite'
@@ -582,7 +588,9 @@ export default {
         paddingLeft: event.isStart ? '6px' : '2px',
         paddingRight: event.isEnd ? '6px' : '2px',
         overflow: 'hidden',
-        border: '1px solid rgba(255, 255, 255, 0.3)'
+        border: '1px solid rgba(255, 255, 255, 0.3)',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.2)',
+        transition: 'all 0.2s ease'
       }
     },
 
@@ -1000,27 +1008,59 @@ export default {
   position: relative;
 }
 
+/* 이벤트 아이템 스타일 */
 .event-item {
-  pointer-events: auto;
+  position: absolute;
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  z-index: 10;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   transition: all 0.2s ease;
 }
 
 .event-item:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-  z-index: 15 !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
+/* 이벤트 내용 컨테이너 */
+.event-content {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* 이벤트 시간 스타일 */
 .event-time {
   font-size: 11px;
   font-weight: 600;
+  opacity: 0.9;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
+/* 이벤트 제목 스타일 */
 .event-title {
-  font-size: 11px;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+/* 시간이 있을 때 제목 스타일 조정 */
+.event-title.with-time {
+  font-size: 11px;
 }
 
 /* 공휴일 상세보기 모달 */
@@ -1218,7 +1258,19 @@ export default {
   }
 
   .event-item {
+    font-size: 11px;
+  }
+
+  .event-time {
     font-size: 10px;
+  }
+
+  .event-title {
+    font-size: 10px;
+  }
+
+  .event-title.with-time {
+    font-size: 9px;
   }
 
   .holiday-modal {
