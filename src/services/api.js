@@ -413,7 +413,7 @@ export const emailSubscriptionAPI = {
    */
   async getSubscribers() {
     try {
-      const response = await apiClient.get('/email-subscriptions')
+      const response = await apiClient.get('/email-subscriptions/admin')
       return response.data
     } catch (error) {
       throw new Error(error.userMessage || '구독자 목록을 불러오는데 실패했습니다.')
@@ -805,5 +805,5 @@ export const apiUtils = {
   }
 }
 
-// 기본 API 클라이언트도 export
+export { noticeAPI } from './noticeAPI.js'
 export default apiClient

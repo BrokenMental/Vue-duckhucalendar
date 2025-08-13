@@ -547,7 +547,14 @@
 </template>
 
 <script>
-import { scheduleAPI, adminAPI, eventRequestAPI, emailSubscriptionAPI } from '@/services/api.js'
+import {
+  scheduleAPI,
+  adminAPI,
+  eventRequestAPI,
+  emailSubscriptionAPI,
+  noticeAPI,
+  healthAPI
+} from '@/services/api.js'
 import EventManagementModal from '@/components/EventManagementModal.vue'
 
 export default {
@@ -709,30 +716,45 @@ export default {
     async loadDashboardData() {
       this.isLoading = true
       try {
-        const { scheduleAPI, eventRequestAPI, emailSubscriptionAPI } = await import('@/services/api.js')
+        // Promise.allSettled를 사용해서 하나가 실패해도 다른 것들은 계속 실행
+        const results = await Promise.allSettled([
+          scheduleAPI.getScheduleStats().catch(err => {
+            console.warn('통계 API 실패:', err)
+            return { totalSchedules: 0, featuredSchedules: 0, todaySchedules: 0 }
+          }),
+          scheduleAPI.getAllSchedules().catch(err => {
+            console.warn('이벤트 API 실패:', err)
+            return { schedules: [] }
+          }),
+          eventRequestAPI.getEventRequests().catch(err => {
+            console.warn('이벤트 요청 API 실패:', err)
+            return []
+          }),
+          emailSubscriptionAPI.getSubscribers().catch(err => {
+            console.warn('구독자 API 실패:', err)
+            return { subscribers: [] }
+          })
+        ])
 
-        // 통계 데이터
-        const statsResponse = await scheduleAPI.getScheduleStats()
-        this.stats = statsResponse
+        // 각 결과 처리
+        this.stats = results[0].value || { totalSchedules: 0, featuredSchedules: 0, todaySchedules: 0 }
+        this.events = results[1].value?.schedules || results[1].value || []
+        this.eventRequests = results[2].value || []
+        this.subscribers = results[3].value?.subscribers || results[3].value || []
 
-        // 이벤트 목록
-        const eventsResponse = await scheduleAPI.getAllSchedules()
-        this.events = eventsResponse.schedules || eventsResponse || []
-
-        // 이벤트 요청
-        const requestsResponse = await eventRequestAPI.getEventRequests()
-        this.eventRequests = requestsResponse || []
-
-        // 구독자 목록
-        const subscribersResponse = await emailSubscriptionAPI.getSubscribers()
-        this.subscribers = subscribersResponse.subscribers || subscribersResponse || []
-
-        // 공지사항 로드
+        // 공지사항은 별도로 로드
         await this.loadNotices()
 
         console.log('✅ 대시보드 데이터 로딩 완료')
+        console.log('- 이벤트:', this.events.length)
+        console.log('- 이벤트 요청:', this.eventRequests.length)
+        console.log('- 구독자:', this.subscribers.length)
+        console.log('- 공지사항:', this.notices.length)
+
       } catch (error) {
         console.error('❌ 대시보드 데이터 로딩 실패:', error)
+      } finally {
+        this.isLoading = false
       }
     },
 
@@ -945,10 +967,6 @@ export default {
      */
     async checkSystemHealth() {
       try {
-        // healthAPI를 import에 추가해야 함
-        // import { scheduleAPI, adminAPI, eventRequestAPI, emailSubscriptionAPI, healthAPI } from '@/services/api.js'
-        const { healthAPI } = await import('@/services/api.js')
-
         const health = await healthAPI.checkHealth()
 
         let message = '🟢 시스템이 정상적으로 작동중입니다.\n\n'
@@ -1017,7 +1035,6 @@ export default {
      */
     async loadNotices() {
       try {
-        const { noticeAPI } = await import('@/services/api.js')
         const response = await noticeAPI.getAllNotices()
         this.notices = response.notices || []
         console.log('✅ 공지사항 로드 완료:', this.notices.length)
@@ -1062,14 +1079,11 @@ export default {
      */
     async saveNotice() {
       try {
-        const { noticeAPI } = await import('@/services/api.js')
-
+        // 동적 import 제거
         if (this.noticeForm.id) {
-          // 수정
           await noticeAPI.updateNotice(this.noticeForm.id, this.noticeForm)
           alert('공지사항이 수정되었습니다.')
         } else {
-          // 생성
           await noticeAPI.createNotice(this.noticeForm)
           alert('공지사항이 생성되었습니다.')
         }
@@ -1089,7 +1103,7 @@ export default {
       if (!confirm('정말 이 공지사항을 삭제하시겠습니까?')) return
 
       try {
-        const { noticeAPI } = await import('@/services/api.js')
+        // 동적 import 제거
         await noticeAPI.deleteNotice(id)
         alert('공지사항이 삭제되었습니다.')
         await this.loadNotices()
@@ -1104,7 +1118,7 @@ export default {
      */
     async toggleNoticeStatus(id) {
       try {
-        const { noticeAPI } = await import('@/services/api.js')
+        // 동적 import 제거
         await noticeAPI.toggleNoticeStatus(id)
         await this.loadNotices()
       } catch (error) {
