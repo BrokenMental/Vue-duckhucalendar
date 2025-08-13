@@ -416,7 +416,8 @@ export const emailSubscriptionAPI = {
       const response = await apiClient.get('/email-subscriptions/admin')
       return response.data
     } catch (error) {
-      throw new Error(error.userMessage || '구독자 목록을 불러오는데 실패했습니다.')
+      console.warn('구독자 API 호출 실패:', error)
+      return { subscribers: [] }
     }
   },
 
