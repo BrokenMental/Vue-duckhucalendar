@@ -175,6 +175,145 @@
           </div>
         </div>
 
+        <!-- 공지사항 관리 탭 -->
+        <div v-if="activeTab === 'notices'" class="tab-content">
+          <div class="content-header">
+            <h2>공지사항 관리</h2>
+            <button class="btn btn-primary" @click="openNoticeModal()">
+              + 새 공지사항
+            </button>
+          </div>
+
+          <div class="notices-list">
+            <div v-if="notices.length === 0" class="empty-state">
+              <p>등록된 공지사항이 없습니다.</p>
+            </div>
+
+            <table v-else class="data-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>제목</th>
+                  <th>우선순위</th>
+                  <th>상태</th>
+                  <th>시작일</th>
+                  <th>종료일</th>
+                  <th>작성일</th>
+                  <th>작업</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="notice in notices" :key="notice.id">
+                  <td>{{ notice.id }}</td>
+                  <td class="notice-title">{{ notice.title }}</td>
+                  <td>
+                    <span class="priority-badge" :style="{ backgroundColor: getNoticePriorityColor(notice.priority) }">
+                      {{ getNoticePriorityText(notice.priority) }}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="status-badge" :class="notice.isActive ? 'active' : 'inactive'">
+                      {{ notice.isActive ? '활성' : '비활성' }}
+                    </span>
+                  </td>
+                  <td>{{ formatDate(notice.startDate) || '-' }}</td>
+                  <td>{{ formatDate(notice.endDate) || '-' }}</td>
+                  <td>{{ formatDate(notice.createdAt) }}</td>
+                  <td class="actions">
+                    <button class="btn-icon" @click="openNoticeModal(notice)" title="수정">
+                      ✏️
+                    </button>
+                    <button class="btn-icon" @click="toggleNoticeStatus(notice.id)" title="상태 변경">
+                      {{ notice.isActive ? '⏸️' : '▶️' }}
+                    </button>
+                    <button class="btn-icon" @click="deleteNotice(notice.id)" title="삭제">
+                      🗑️
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 공지사항 모달 -->
+        <div v-if="showNoticeModal" class="modal-overlay" @click.self="showNoticeModal = false">
+          <div class="modal-content notice-modal">
+            <div class="modal-header">
+              <h3>{{ noticeForm.id ? '공지사항 수정' : '새 공지사항' }}</h3>
+              <button class="close-btn" @click="showNoticeModal = false">×</button>
+            </div>
+
+            <div class="modal-body">
+              <div class="form-group">
+                <label>제목 *</label>
+                <input
+                  v-model="noticeForm.title"
+                  type="text"
+                  placeholder="공지사항 제목을 입력하세요"
+                  required
+                />
+              </div>
+
+              <div class="form-group">
+                <label>내용 *</label>
+                <textarea
+                  v-model="noticeForm.content"
+                  rows="6"
+                  placeholder="공지사항 내용을 입력하세요"
+                  required
+                ></textarea>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label>우선순위</label>
+                  <select v-model="noticeForm.priority">
+                    <option :value="0">일반</option>
+                    <option :value="1">중요</option>
+                    <option :value="2">긴급</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label>상태</label>
+                  <select v-model="noticeForm.isActive">
+                    <option :value="true">활성</option>
+                    <option :value="false">비활성</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label>시작일 (선택)</label>
+                  <input
+                    v-model="noticeForm.startDate"
+                    type="datetime-local"
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label>종료일 (선택)</label>
+                  <input
+                    v-model="noticeForm.endDate"
+                    type="datetime-local"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-footer">
+              <button class="btn btn-secondary" @click="showNoticeModal = false">
+                취소
+              </button>
+              <button class="btn btn-primary" @click="saveNotice">
+                {{ noticeForm.id ? '수정' : '생성' }}
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- 이벤트 요청 탭 -->
         <div v-if="activeTab === 'requests'" class="requests-panel">
           <div class="panel-header">
@@ -436,6 +575,7 @@ export default {
       tabs: [
         { id: 'dashboard', label: '대시보드' },
         { id: 'events', label: '이벤트 관리' },
+        { id: 'notices', label: '공지사항 관리' },
         { id: 'requests', label: '이벤트 요청' },
         { id: 'subscribers', label: '구독자 관리' },
         { id: 'settings', label: '설정' }
@@ -474,7 +614,19 @@ export default {
         defaultView: 'month',
         eventsPerPage: 20,
         showWeekNumbers: false
-      }
+      },
+      notices: [],  // 공지사항 목록
+      selectedNotice: null,  // 선택된 공지사항
+      showNoticeModal: false,  // 공지사항 모달 표시 여부
+      noticeForm: {  // 공지사항 폼
+        id: null,
+        title: '',
+        content: '',
+        priority: 0,
+        isActive: true,
+        startDate: null,
+        endDate: null
+      },
     }
   },
 
@@ -555,7 +707,10 @@ export default {
 
     // 대시보드 데이터 로딩
     async loadDashboardData() {
+      this.isLoading = true
       try {
+        const { scheduleAPI, eventRequestAPI, emailSubscriptionAPI } = await import('@/services/api.js')
+
         // 통계 데이터
         const statsResponse = await scheduleAPI.getScheduleStats()
         this.stats = statsResponse
@@ -571,6 +726,9 @@ export default {
         // 구독자 목록
         const subscribersResponse = await emailSubscriptionAPI.getSubscribers()
         this.subscribers = subscribersResponse.subscribers || subscribersResponse || []
+
+        // 공지사항 로드
+        await this.loadNotices()
 
         console.log('✅ 대시보드 데이터 로딩 완료')
       } catch (error) {
@@ -853,7 +1011,131 @@ export default {
         3: '#27AE60'  // 녹색 (낮음)
       }
       return colors[priority] || '#F39C12'
-    }
+    },
+    /**
+     * 공지사항 목록 로드
+     */
+    async loadNotices() {
+      try {
+        const { noticeAPI } = await import('@/services/api.js')
+        const response = await noticeAPI.getAllNotices()
+        this.notices = response.notices || []
+        console.log('✅ 공지사항 로드 완료:', this.notices.length)
+      } catch (error) {
+        console.error('❌ 공지사항 로드 실패:', error)
+        this.notices = []
+      }
+    },
+
+    /**
+     * 공지사항 생성/수정 모달 열기
+     */
+    openNoticeModal(notice = null) {
+      if (notice) {
+        // 수정 모드
+        this.noticeForm = {
+          id: notice.id,
+          title: notice.title,
+          content: notice.content,
+          priority: notice.priority || 0,
+          isActive: notice.isActive !== false,
+          startDate: notice.startDate,
+          endDate: notice.endDate
+        }
+      } else {
+        // 생성 모드
+        this.noticeForm = {
+          id: null,
+          title: '',
+          content: '',
+          priority: 0,
+          isActive: true,
+          startDate: null,
+          endDate: null
+        }
+      }
+      this.showNoticeModal = true
+    },
+
+    /**
+     * 공지사항 저장
+     */
+    async saveNotice() {
+      try {
+        const { noticeAPI } = await import('@/services/api.js')
+
+        if (this.noticeForm.id) {
+          // 수정
+          await noticeAPI.updateNotice(this.noticeForm.id, this.noticeForm)
+          alert('공지사항이 수정되었습니다.')
+        } else {
+          // 생성
+          await noticeAPI.createNotice(this.noticeForm)
+          alert('공지사항이 생성되었습니다.')
+        }
+
+        this.showNoticeModal = false
+        await this.loadNotices()
+      } catch (error) {
+        console.error('공지사항 저장 실패:', error)
+        alert('공지사항 저장에 실패했습니다.')
+      }
+    },
+
+    /**
+     * 공지사항 삭제
+     */
+    async deleteNotice(id) {
+      if (!confirm('정말 이 공지사항을 삭제하시겠습니까?')) return
+
+      try {
+        const { noticeAPI } = await import('@/services/api.js')
+        await noticeAPI.deleteNotice(id)
+        alert('공지사항이 삭제되었습니다.')
+        await this.loadNotices()
+      } catch (error) {
+        console.error('공지사항 삭제 실패:', error)
+        alert('공지사항 삭제에 실패했습니다.')
+      }
+    },
+
+    /**
+     * 공지사항 상태 토글
+     */
+    async toggleNoticeStatus(id) {
+      try {
+        const { noticeAPI } = await import('@/services/api.js')
+        await noticeAPI.toggleNoticeStatus(id)
+        await this.loadNotices()
+      } catch (error) {
+        console.error('상태 변경 실패:', error)
+        alert('상태 변경에 실패했습니다.')
+      }
+    },
+
+    /**
+     * 공지사항 우선순위 텍스트와 색상 반환
+     */
+    getNoticePriorityText(priority) {
+      const priorities = {
+        0: '일반',
+        1: '중요',
+        2: '긴급'
+      }
+      return priorities[priority] || '일반'
+    },
+
+    /**
+     * 공지사항 우선순위 색상 반환
+     */
+    getNoticePriorityColor(priority) {
+      const colors = {
+        0: '#6c757d',  // 회색 (일반)
+        1: '#ffc107',  // 노란색 (중요)
+        2: '#dc3545'   // 빨간색 (긴급)
+      }
+      return colors[priority] || '#6c757d'
+    },
   }
 }
 </script>
@@ -1390,6 +1672,168 @@ export default {
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* 공지사항 관련 스타일 */
+.notices-list {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 20px;
+}
+
+.notice-title {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.priority-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-badge.active {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.status-badge.inactive {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+/* 모달 스타일 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.notice-modal {
+  padding: 0;
+}
+
+.modal-header {
+  padding: 20px;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #333;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-btn:hover {
+  color: #333;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.modal-footer {
+  padding: 20px;
+  border-top: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #333;
+}
+
+.form-group input[type="text"],
+.form-group input[type="datetime-local"],
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.form-group textarea {
+  resize: vertical;
+  font-family: inherit;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px;
+  margin: 0 2px;
+  transition: transform 0.2s;
+}
+
+.btn-icon:hover {
+  transform: scale(1.2);
+}
+
+.actions {
+  display: flex;
+  gap: 5px;
 }
 
 /* 반응형 디자인 */

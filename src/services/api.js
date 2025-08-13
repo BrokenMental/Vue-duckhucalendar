@@ -675,7 +675,7 @@ export const eventRequestAPI = {
    */
   async getEventRequests() {
     try {
-      const response = await apiClient.get('/event-requests/admin')
+      const response = await apiClient.get('/event-requests/admin/list')
       return response.data
     } catch (error) {
       throw new Error(error.userMessage || '이벤트 요청 목록을 불러오는데 실패했습니다.')

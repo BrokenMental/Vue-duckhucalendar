@@ -1,5 +1,4 @@
 import { fileURLToPath, URL } from 'node:url'
-
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
@@ -17,18 +16,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // 모든 API 요청을 백엔드로 프록시
-      '/holidays': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
-        secure: false
-      },
-      '/schedules': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
-        secure: false
-      },
-      '/admin': {
+      // API 요청만 백엔드(Spring Boot)로 프록시
+      '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,
         secure: false
