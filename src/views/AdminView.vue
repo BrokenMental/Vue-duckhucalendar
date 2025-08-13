@@ -612,6 +612,7 @@ export default {
         await scheduleAPI.deleteSchedule(event.id)
         await this.loadDashboardData()
         alert('이벤트가 삭제되었습니다.')
+      // eslint-disable-next-line no-unused-vars
       } catch (error) {
         alert('이벤트 삭제에 실패했습니다.')
       }
@@ -624,6 +625,7 @@ export default {
           isFeatured: !event.isFeatured
         })
         await this.loadDashboardData()
+      // eslint-disable-next-line no-unused-vars
       } catch (error) {
         alert('추천 상태 변경에 실패했습니다.')
       }
@@ -635,6 +637,7 @@ export default {
         await eventRequestAPI.updateRequestStatus(request.id, 'approved')
         await this.loadDashboardData()
         alert('요청이 승인되었습니다.')
+      // eslint-disable-next-line no-unused-vars
       } catch (error) {
         alert('요청 승인에 실패했습니다.')
       }
@@ -645,6 +648,7 @@ export default {
         await eventRequestAPI.updateRequestStatus(request.id, 'rejected')
         await this.loadDashboardData()
         alert('요청이 거절되었습니다.')
+      // eslint-disable-next-line no-unused-vars
       } catch (error) {
         alert('요청 거절에 실패했습니다.')
       }
@@ -666,6 +670,7 @@ export default {
           isActive: !subscriber.isActive
         })
         await this.loadDashboardData()
+      // eslint-disable-next-line no-unused-vars
       } catch (error) {
         alert('구독자 상태 변경에 실패했습니다.')
       }
@@ -676,6 +681,7 @@ export default {
       try {
         console.log('일반 설정 저장:', this.settings)
         alert('일반 설정이 저장되었습니다.')
+      // eslint-disable-next-line no-unused-vars
       } catch (error) {
         alert('설정 저장에 실패했습니다.')
       }
@@ -685,6 +691,7 @@ export default {
       try {
         console.log('뉴스레터 설정 저장:', this.settings)
         alert('뉴스레터 설정이 저장되었습니다.')
+      // eslint-disable-next-line no-unused-vars
       } catch (error) {
         alert('설정 저장에 실패했습니다.')
       }
@@ -694,6 +701,7 @@ export default {
       try {
         console.log('캘린더 설정 저장:', this.settings)
         alert('캘린더 설정이 저장되었습니다.')
+      // eslint-disable-next-line no-unused-vars
       } catch (error) {
         alert('설정 저장에 실패했습니다.')
       }
@@ -704,6 +712,7 @@ export default {
       try {
         // 백업 생성 로직
         alert('데이터 백업이 생성되었습니다.')
+      // eslint-disable-next-line no-unused-vars
       } catch (error) {
         alert('백업 생성에 실패했습니다.')
       }
@@ -717,6 +726,7 @@ export default {
         // 모든 이벤트 삭제 로직
         alert('모든 이벤트가 삭제되었습니다.')
         await this.loadDashboardData()
+      // eslint-disable-next-line no-unused-vars
       } catch (error) {
         alert('이벤트 삭제에 실패했습니다.')
       }
@@ -730,24 +740,119 @@ export default {
         // 모든 구독자 삭제 로직
         alert('모든 구독자가 삭제되었습니다.')
         await this.loadDashboardData()
+      // eslint-disable-next-line no-unused-vars
       } catch (error) {
         alert('구독자 삭제에 실패했습니다.')
       }
     },
 
+    /**
+     * 날짜 포맷팅 함수
+     * @param {string|Date} date - 포맷팅할 날짜
+     */
+    formatDate(date) {
+      if (!date) return '-'
+
+      const dateObj = new Date(date)
+      if (isNaN(dateObj.getTime())) return '-'
+
+      const year = dateObj.getFullYear()
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0')
+      const day = String(dateObj.getDate()).padStart(2, '0')
+
+      return `${year}-${month}-${day}`
+    },
+
+    /**
+     * 날짜와 시간 포맷팅 함수
+     * @param {string|Date} datetime - 포맷팅할 날짜시간
+     */
+    formatDateTime(datetime) {
+      if (!datetime) return '-'
+
+      const dateObj = new Date(datetime)
+      if (isNaN(dateObj.getTime())) return '-'
+
+      const year = dateObj.getFullYear()
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0')
+      const day = String(dateObj.getDate()).padStart(2, '0')
+      const hours = String(dateObj.getHours()).padStart(2, '0')
+      const minutes = String(dateObj.getMinutes()).padStart(2, '0')
+
+      return `${year}-${month}-${day} ${hours}:${minutes}`
+    },
+
+    /**
+     * 시스템 상태 확인
+     */
     async checkSystemHealth() {
       try {
-        // 시스템 상태 확인 로직
-        alert('시스템이 정상적으로 동작하고 있습니다.')
+        // healthAPI를 import에 추가해야 함
+        // import { scheduleAPI, adminAPI, eventRequestAPI, emailSubscriptionAPI, healthAPI } from '@/services/api.js'
+        const { healthAPI } = await import('@/services/api.js')
+
+        const health = await healthAPI.checkHealth()
+
+        let message = '🟢 시스템이 정상적으로 작동중입니다.\n\n'
+        message += `서버 상태: ${health.status || '정상'}\n`
+        message += `데이터베이스: ${health.database || '연결됨'}\n`
+        message += `응답시간: ${health.responseTime || 'N/A'}ms`
+
+        alert(message)
       } catch (error) {
-        alert('시스템 상태 확인에 실패했습니다.')
+        alert(`🔴 시스템 상태 확인 실패\n\n${error.message}`)
       }
     },
 
-    // 유틸리티 메서드
-    formatDate(date) {
-      if (!date) return ''
-      return new Date(date).toLocaleDateString('ko-KR')
+    /**
+     * 구독자 상태 업데이트 (수정된 메서드명)
+     */
+    async updateSubscriberStatus(subscriber) {
+      try {
+        await emailSubscriptionAPI.updateSubscriberStatus(subscriber.id, !subscriber.isActive)
+        await this.loadDashboardData()
+      // eslint-disable-next-line no-unused-vars
+      } catch (error) {
+        alert('구독자 상태 변경에 실패했습니다.')
+      }
+    },
+
+    /**
+     * 카테고리 배지 색상 반환
+     */
+    getCategoryColor(category) {
+      const colors = {
+        '공연': '#FF6B6B',
+        '전시': '#4ECDC4',
+        '페스티벌': '#45B7D1',
+        '워크샵': '#96CEB4',
+        '기타': '#FECA57'
+      }
+      return colors[category] || '#95A5A6'
+    },
+
+    /**
+     * 우선순위 텍스트 반환
+     */
+    getPriorityText(priority) {
+      const priorities = {
+        1: '높음',
+        2: '보통',
+        3: '낮음'
+      }
+      return priorities[priority] || '보통'
+    },
+
+    /**
+     * 우선순위 색상 반환
+     */
+    getPriorityColor(priority) {
+      const colors = {
+        1: '#E74C3C', // 빨간색 (높음)
+        2: '#F39C12', // 주황색 (보통)
+        3: '#27AE60'  // 녹색 (낮음)
+      }
+      return colors[priority] || '#F39C12'
     }
   }
 }

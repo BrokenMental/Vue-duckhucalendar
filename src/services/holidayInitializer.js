@@ -344,9 +344,23 @@ export const holidayInitUtils = {
       await this.waitForHolidayData(3000)
 
       // 공휴일 조회
-      const holidays = await holidayAPI.getHolidaysByDateRange(startDate, endDate)
+      const response = await holidayAPI.getHolidaysByDateRange(startDate, endDate)
 
-      // 날짜별 그룹화
+      // API 응답 구조 확인 및 holidays 배열 추출
+      let holidays = []
+
+      if (response && response.holidays && Array.isArray(response.holidays)) {
+        holidays = response.holidays
+      } else if (Array.isArray(response)) {
+        holidays = response
+      } else {
+        console.warn('예상하지 못한 공휴일 API 응답 구조:', response)
+        holidays = []
+      }
+
+      console.log(`🔍 추출된 공휴일 배열:`, holidays)
+
+      // 날짜별 그룹화 - holidayUtils는 holidayAPI에서 import
       const groupedHolidays = holidayUtils.groupHolidaysByDate(holidays)
 
       return {
@@ -359,15 +373,35 @@ export const holidayInitUtils = {
       console.error('캘린더용 공휴일 조회 실패:', error)
 
       // 에러 시 기본 데이터 반환
-      const fallbackHolidays = holidayAPI.getFallbackHolidays(startDate, endDate)
-      const groupedFallback = holidayUtils.groupHolidaysByDate(fallbackHolidays)
+      try {
+        const fallbackHolidays = holidayAPI.getFallbackHolidays(startDate, endDate)
+        let fallbackArray = []
 
-      return {
-        success: false,
-        holidays: groupedFallback,
-        totalCount: fallbackHolidays.length,
-        error: error.message,
-        fallback: true
+        if (fallbackHolidays && fallbackHolidays.holidays && Array.isArray(fallbackHolidays.holidays)) {
+          fallbackArray = fallbackHolidays.holidays
+        } else if (Array.isArray(fallbackHolidays)) {
+          fallbackArray = fallbackHolidays
+        }
+
+        const groupedFallback = holidayUtils.groupHolidaysByDate(fallbackArray)
+
+        return {
+          success: false,
+          holidays: groupedFallback,
+          totalCount: fallbackArray.length,
+          error: error.message,
+          fallback: true
+        }
+      } catch (fallbackError) {
+        console.error('폴백 공휴일 데이터도 실패:', fallbackError)
+
+        return {
+          success: false,
+          holidays: {},
+          totalCount: 0,
+          error: error.message,
+          fallback: true
+        }
       }
     }
   },

@@ -1,46 +1,5 @@
-import axios from 'axios'
-
-// API 기본 URL 설정
-const API_BASE_URL = import.meta.env.VUE_APP_API_URL || 'http://localhost:8080'
-
-// Axios 인스턴스 생성
-const holidayAxios = axios.create({
-  baseURL: `${API_BASE_URL}/api/holidays`,
-  timeout: 15000,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-})
-
-// 요청 인터셉터 (인증 토큰 등 추가 가능)
-holidayAxios.interceptors.request.use(
-  (config) => {
-    // 필요시 인증 토큰 추가
-    // const token = localStorage.getItem('authToken')
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`
-    // }
-
-    console.log('공휴일 API 요청:', config.method?.toUpperCase(), config.url, config.params)
-    return config
-  },
-  (error) => {
-    console.error('공휴일 API 요청 오류:', error)
-    return Promise.reject(error)
-  }
-)
-
-// 응답 인터셉터
-holidayAxios.interceptors.response.use(
-  (response) => {
-    console.log('공휴일 API 응답:', response.status, response.config.url)
-    return response
-  },
-  (error) => {
-    console.error('공휴일 API 응답 오류:', error.response?.status, error.response?.data || error.message)
-    return Promise.reject(error)
-  }
-)
+// apiClient에서 통합된 클라이언트 가져오기
+import { apiClient } from './apiClient.js'
 
 /**
  * 공휴일 API 서비스 (공공데이터 연동)
@@ -55,289 +14,164 @@ export const holidayAPI = {
    * @param {string} startDate - 시작 날짜 (YYYY-MM-DD)
    * @param {string} endDate - 종료 날짜 (YYYY-MM-DD)
    * @param {string} countryCode - 국가 코드 (기본값: KR)
-   * @returns {Promise<Array>} 공휴일 목록
    */
   async getHolidaysByDateRange(startDate, endDate, countryCode = 'KR') {
-    const cacheKey = `range-${startDate}-${endDate}-${countryCode}`
+    const cacheKey = `holidays-range-${startDate}-${endDate}-${countryCode}`
 
     // 캐시 확인
     if (this.cache.has(cacheKey)) {
       const cached = this.cache.get(cacheKey)
       if (Date.now() - cached.timestamp < this.cacheTimeout) {
-        console.log('📋 캐시에서 공휴일 조회:', cacheKey)
+        console.log(`📋 공휴일 캐시에서 로딩: ${startDate} ~ ${endDate}`)
         return cached.data
       }
+      this.cache.delete(cacheKey)
     }
 
     try {
-      const response = await holidayAxios.get('/range', {
+      console.log(`🌐 공휴일 API 호출: ${startDate} ~ ${endDate}`)
+
+      const response = await apiClient.get('/holidays/range', {
         params: {
-          start: startDate,
-          end: endDate,
+          startDate,
+          endDate,
           countryCode
         }
       })
 
-      const holidays = response.data.holidays || []
-
-      // 캐시 저장
+      // 캐시에 저장
       this.cache.set(cacheKey, {
-        data: holidays,
+        data: response.data,
         timestamp: Date.now()
       })
 
-      console.log(`✅ ${holidays.length}개 공휴일 조회 성공 (${startDate} ~ ${endDate})`)
-      return holidays
+      console.log(`✅ 공휴일 ${response.data.count}개 조회 완료`)
+      return response.data
 
     } catch (error) {
-      console.error('날짜 범위별 공휴일 조회 실패:', error)
+      console.error('공휴일 조회 실패:', error)
 
-      // 에러 시 기본 공휴일 반환
-      const fallbackHolidays = this.getFallbackHolidays(startDate, endDate)
-      console.warn('기본 공휴일 데이터 사용:', fallbackHolidays.length + '개')
+      // 백엔드 실패 시 기본 공휴일 반환
+      const defaultHolidays = this.getDefaultKoreanHolidaysForRange(startDate, endDate)
+      console.log('📅 기본 공휴일 데이터 사용')
+      return defaultHolidays
+    }
+  },
 
-      return fallbackHolidays
+  /**
+   * 특정 연도의 모든 공휴일 조회
+   * @param {number} year - 연도
+   * @param {string} countryCode - 국가 코드
+   */
+  async getHolidaysByYear(year, countryCode = 'KR') {
+    const cacheKey = `holidays-year-${year}-${countryCode}`
+
+    // 캐시 확인
+    if (this.cache.has(cacheKey)) {
+      const cached = this.cache.get(cacheKey)
+      if (Date.now() - cached.timestamp < this.cacheTimeout) {
+        console.log(`📋 ${year}년 공휴일 캐시에서 로딩`)
+        return cached.data
+      }
+      this.cache.delete(cacheKey)
+    }
+
+    try {
+      console.log(`🌐 ${year}년 공휴일 API 호출`)
+
+      const response = await apiClient.get(`/holidays/year/${year}`, {
+        params: { countryCode }
+      })
+
+      // 캐시에 저장
+      this.cache.set(cacheKey, {
+        data: response.data,
+        timestamp: Date.now()
+      })
+
+      console.log(`✅ ${year}년 공휴일 ${response.data.count}개 조회 완료`)
+      return response.data
+
+    } catch (error) {
+      console.error(`${year}년 공휴일 조회 실패:`, error)
+
+      // 백엔드 실패 시 기본 공휴일 반환
+      const defaultHolidays = this.getDefaultKoreanHolidays(year)
+      console.log(`📅 ${year}년 기본 공휴일 데이터 사용`)
+      return defaultHolidays
     }
   },
 
   /**
    * 특정 날짜의 공휴일 조회
-   * @param {string} date - 날짜 (YYYY-MM-DD)
-   * @param {string} countryCode - 국가 코드 (기본값: KR)
-   * @returns {Promise<Array>} 해당 날짜의 공휴일 목록
+   * @param {string} date - 날짜 (YYYY-MM-DD 형식)
    */
-  async getHolidaysByDate(date, countryCode = 'KR') {
+  async getHolidaysByDate(date) {
     try {
-      const response = await holidayAxios.get(`/date/${date}`, {
-        params: { countryCode }
-      })
-
-      return response.data || []
-    } catch (error) {
-      console.error('특정 날짜 공휴일 조회 실패:', error)
-      return []
-    }
-  },
-
-  /**
-   * 연도별 공휴일 조회 (공공데이터 자동 동기화)
-   * @param {number} year - 연도
-   * @param {string} countryCode - 국가 코드 (기본값: KR)
-   * @returns {Promise<Array>} 해당 연도의 공휴일 목록
-   */
-  async getHolidaysByYear(year, countryCode = 'KR') {
-    const cacheKey = `year-${year}-${countryCode}`
-
-    // 캐시 확인
-    if (this.cache.has(cacheKey)) {
-      const cached = this.cache.get(cacheKey)
-      if (Date.now() - cached.timestamp < this.cacheTimeout) {
-        console.log('📋 캐시에서 연도별 공휴일 조회:', year)
-        return cached.data
-      }
-    }
-
-    try {
-      const response = await holidayAxios.get(`/year/${year}`, {
-        params: { countryCode }
-      })
-
-      // 응답 데이터 안전하게 추출
-      const responseData = response.data || {}
-      let holidays = responseData.holidays || []
-      const count = responseData.count || holidays.length || 0
-
-      console.log(`✅ ${year}년 공휴일 ${count}개 조회 성공`)
-
-      // 공휴일이 적으면 관리자 권한으로 동기화 시도 (하지만 실패해도 무시)
-      if (count < 5 && countryCode === 'KR') {
-        console.log(`${year}년 공휴일이 부족합니다. 관리자 동기화를 시도해봅니다.`)
-        try {
-          await this.syncHolidaysFromPublicAPI(year)
-          // 동기화 성공 시 다시 조회
-          const retryResponse = await holidayAxios.get(`/year/${year}`, {
-            params: { countryCode }
-          })
-          const retryData = retryResponse.data || {}
-          holidays = retryData.holidays || holidays
-        // eslint-disable-next-line no-unused-vars
-        } catch (syncError) {
-          console.warn(`${year}년 관리자 동기화 실패 (권한 없음). 기본 데이터를 사용합니다.`)
-          // 동기화 실패해도 기존 데이터 사용
-        }
-      }
-
-      // 캐시 저장
-      this.cache.set(cacheKey, {
-        data: holidays,
-        timestamp: Date.now()
-      })
-
-      return holidays
-
-    } catch (error) {
-      console.error('연도별 공휴일 조회 실패:', error)
-
-      // 에러 시 기본 공휴일 반환
-      const fallbackHolidays = this.getDefaultKoreanHolidays(year)
-      console.warn(`${year}년 기본 공휴일 데이터 사용:`, fallbackHolidays.length + '개')
-
-      return fallbackHolidays
-    }
-  },
-
-  /**
-   * 공공데이터 API 동기화 요청
-   * @param {number} year - 연도
-   */
-  async syncHolidaysFromPublicAPI(year) {
-    try {
-      const response = await axios.post(`${API_BASE_URL}/admin/holidays/sync/${year}`)
-      console.log(`✅ ${year}년 공공데이터 동기화 성공:`, response.data.message)
-
-      // 캐시 무효화
-      this.clearCacheForYear(year)
-
+      const response = await apiClient.get(`/holidays/date/${date}`)
       return response.data
     } catch (error) {
-      console.error(`❌ ${year}년 공공데이터 동기화 실패:`, error)
-      throw new Error(`공공데이터 동기화 실패: ${error.response?.data?.message || error.message}`)
-    }
-  },
-
-  /**
-   * 현재 연도 공휴일 동기화
-   */
-  async syncCurrentYearHolidays() {
-    try {
-      const response = await axios.post(`${API_BASE_URL}/admin/holidays/sync/current`)
-      console.log('✅ 현재 연도 공휴일 동기화 성공:', response.data.message)
-
-      // 관련 캐시 무효화
-      const currentYear = new Date().getFullYear()
-      this.clearCacheForYear(currentYear)
-      this.clearCacheForYear(currentYear + 1)
-
-      return response.data
-    } catch (error) {
-      console.error('❌ 현재 연도 공휴일 동기화 실패:', error)
-      throw new Error(`현재 연도 동기화 실패: ${error.response?.data?.message || error.message}`)
-    }
-  },
-
-  /**
-   * 특정 연도 캐시 무효화
-   * @param {number} year - 연도
-   */
-  clearCacheForYear(year) {
-    const keysToDelete = []
-    for (const key of this.cache.keys()) {
-      if (key.includes(`year-${year}`) || key.includes(`${year}-`)) {
-        keysToDelete.push(key)
+      console.error('날짜별 공휴일 조회 실패:', error)
+      return {
+        date: date,
+        holidays: [],
+        count: 0,
+        isHoliday: false
       }
     }
-
-    keysToDelete.forEach(key => {
-      this.cache.delete(key)
-      console.log('🗑️ 캐시 삭제:', key)
-    })
   },
 
   /**
-   * 전체 캐시 무효화
-   */
-  clearAllCache() {
-    this.cache.clear()
-    console.log('🗑️ 모든 공휴일 캐시 삭제')
-  },
-
-  /**
-   * API 실패 시 기본 한국 공휴일 반환
+   * 특정 월의 공휴일 조회
    * @param {number} year - 연도
+   * @param {number} month - 월 (1-12)
    */
-  getDefaultKoreanHolidays(year) {
-    const defaultHolidays = [
-      { name: '신정', month: 1, day: 1, type: 'PUBLIC', description: '새해 첫날', color: '#FF6B6B' },
-      { name: '삼일절', month: 3, day: 1, type: 'NATIONAL', description: '3·1 독립운동 기념일', color: '#4285F4' },
-      { name: '어린이날', month: 5, day: 5, type: 'PUBLIC', description: '어린이날', color: '#FF6B6B' },
-      { name: '현충일', month: 6, day: 6, type: 'MEMORIAL', description: '호국영령을 추모하는 날', color: '#9C27B0' },
-      { name: '광복절', month: 8, day: 15, type: 'NATIONAL', description: '일제강점기 해방 기념일', color: '#4285F4' },
-      { name: '개천절', month: 10, day: 3, type: 'NATIONAL', description: '단군왕검이 고조선을 건국한 날', color: '#4285F4' },
-      { name: '한글날', month: 10, day: 9, type: 'NATIONAL', description: '한글 창제를 기념하는 날', color: '#4285F4' },
-      { name: '크리스마스', month: 12, day: 25, type: 'PUBLIC', description: '예수 그리스도의 탄생을 기념하는 날', color: '#FF6B6B' }
-    ]
-
-    return defaultHolidays.map(holiday => ({
-      id: `default-${year}-${holiday.month.toString().padStart(2, '0')}-${holiday.day.toString().padStart(2, '0')}`,
-      name: holiday.name,
-      holidayDate: `${year}-${holiday.month.toString().padStart(2, '0')}-${holiday.day.toString().padStart(2, '0')}`,
-      countryCode: 'KR',
-      holidayType: holiday.type,
-      description: holiday.description,
-      isRecurring: true,
-      color: holiday.color
-    }))
-  },
-
-  /**
-   * 날짜 범위의 기본 공휴일 반환
-   * @param {string} startDate - 시작 날짜
-   * @param {string} endDate - 종료 날짜
-   */
-  getFallbackHolidays(startDate, endDate) {
-    const start = new Date(startDate)
-    const end = new Date(endDate)
-    const holidays = []
-
-    // 시작년도부터 종료년도까지의 기본 공휴일 생성
-    for (let year = start.getFullYear(); year <= end.getFullYear(); year++) {
-      const yearHolidays = this.getDefaultKoreanHolidays(year)
-
-      // 날짜 범위 내의 공휴일만 필터링
-      const filteredHolidays = yearHolidays.filter(holiday => {
-        const holidayDate = new Date(holiday.holidayDate)
-        return holidayDate >= start && holidayDate <= end
-      })
-
-      holidays.push(...filteredHolidays)
+  async getHolidaysByMonth(year, month) {
+    try {
+      const response = await apiClient.get(`/holidays/month/${year}/${month}`)
+      return response.data
+    } catch (error) {
+      console.error('월별 공휴일 조회 실패:', error)
+      return {
+        year: year,
+        month: month,
+        holidays: [],
+        count: 0
+      }
     }
-
-    return holidays
   },
 
   /**
-   * 공휴일 등록
+   * 공휴일 추가 (관리자용)
    * @param {Object} holidayData - 공휴일 데이터
-   * @returns {Promise<Object>} 등록된 공휴일 정보
    */
   async createHoliday(holidayData) {
     try {
-      const response = await holidayAxios.post('', holidayData)
+      const response = await apiClient.post('/holidays', holidayData)
 
       // 캐시 무효화
       this.clearAllCache()
 
       return response.data
     } catch (error) {
-      console.error('공휴일 등록 실패:', error)
+      console.error('공휴일 추가 실패:', error)
 
-      if (error.response?.status === 400) {
-        throw new Error(error.response.data.message || '잘못된 공휴일 정보입니다.')
+      if (error.response?.status === 409) {
+        throw new Error('이미 존재하는 공휴일입니다.')
       }
 
-      throw new Error('공휴일 등록에 실패했습니다.')
+      throw new Error('공휴일 추가에 실패했습니다.')
     }
   },
 
   /**
-   * 공휴일 수정
+   * 공휴일 수정 (관리자용)
    * @param {number} id - 공휴일 ID
-   * @param {Object} holidayData - 수정할 공휴일 데이터
-   * @returns {Promise<Object>} 수정된 공휴일 정보
+   * @param {Object} holidayData - 수정할 데이터
    */
   async updateHoliday(id, holidayData) {
     try {
-      const response = await holidayAxios.put(`/${id}`, holidayData)
+      const response = await apiClient.put(`/holidays/${id}`, holidayData)
 
       // 캐시 무효화
       this.clearAllCache()
@@ -355,13 +189,12 @@ export const holidayAPI = {
   },
 
   /**
-   * 공휴일 삭제
+   * 공휴일 삭제 (관리자용)
    * @param {number} id - 공휴일 ID
-   * @returns {Promise<void>}
    */
   async deleteHoliday(id) {
     try {
-      await holidayAxios.delete(`/${id}`)
+      await apiClient.delete(`/holidays/${id}`)
 
       // 캐시 무효화
       this.clearAllCache()
@@ -382,7 +215,7 @@ export const holidayAPI = {
    */
   async getTodayHolidays() {
     try {
-      const response = await holidayAxios.get('/today')
+      const response = await apiClient.get('/holidays/today')
       return response.data
     } catch (error) {
       console.error('오늘 공휴일 조회 실패:', error)
@@ -396,12 +229,12 @@ export const holidayAPI = {
   },
 
   /**
-   * 공휴일 통계 조회
+   * 공휴일 통계 조회 (관리자용)
    * @param {number} year - 연도
    */
   async getHolidayStatistics(year) {
     try {
-      const response = await axios.get(`${API_BASE_URL}/admin/holidays/stats/${year}`)
+      const response = await apiClient.get(`/admin/holidays/stats/${year}`)
       return response.data.data || response.data
     } catch (error) {
       console.error('공휴일 통계 조회 실패:', error)
@@ -415,17 +248,143 @@ export const holidayAPI = {
   },
 
   /**
-   * 공공데이터 API 연결 테스트
+   * 공공데이터 API 연결 테스트 (관리자용)
    * @param {number} year - 테스트할 연도
    */
   async testPublicApiConnection(year = new Date().getFullYear()) {
     try {
-      const response = await axios.get(`${API_BASE_URL}/admin/holidays/test-connection/${year}`)
+      const response = await apiClient.get(`/admin/holidays/test-connection/${year}`)
       return response.data
     } catch (error) {
       console.error('공공데이터 API 연결 테스트 실패:', error)
       throw new Error(`API 연결 테스트 실패: ${error.response?.data?.message || error.message}`)
     }
+  },
+
+  /**
+   * 기본 한국 공휴일 반환 (백엔드 실패시 사용)
+   * @param {number} year - 연도
+   */
+  getDefaultKoreanHolidays(year) {
+    const defaultHolidays = [
+      { name: '신정', month: 1, day: 1, description: '새해 첫날' },
+      { name: '삼일절', month: 3, day: 1, description: '3·1운동 기념일' },
+      { name: '어린이날', month: 5, day: 5, description: '어린이날' },
+      { name: '현충일', month: 6, day: 6, description: '호국영령 추념일' },
+      { name: '광복절', month: 8, day: 15, description: '일제강점기 해방 기념일' },
+      { name: '개천절', month: 10, day: 3, description: '단군왕검 건국 기념일' },
+      { name: '한글날', month: 10, day: 9, description: '한글 창제 기념일' },
+      { name: '크리스마스', month: 12, day: 25, description: '성탄절' }
+    ]
+
+    const holidays = defaultHolidays.map(holiday => ({
+      id: `default-${year}-${holiday.month.toString().padStart(2, '0')}-${holiday.day.toString().padStart(2, '0')}`,
+      name: holiday.name,
+      holidayDate: `${year}-${holiday.month.toString().padStart(2, '0')}-${holiday.day.toString().padStart(2, '0')}`,
+      countryCode: 'KR',
+      holidayType: 'PUBLIC',
+      description: holiday.description,
+      isRecurring: true,
+      color: '#FF6B6B'
+    }))
+
+    return {
+      year: year,
+      holidays: holidays,
+      count: holidays.length
+    }
+  },
+
+  /**
+   * 날짜 범위에 대한 기본 한국 공휴일 반환
+   * @param {string} startDate - 시작 날짜
+   * @param {string} endDate - 종료 날짜
+   */
+  getDefaultKoreanHolidaysForRange(startDate, endDate) {
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    const years = []
+
+    // 해당 범위의 모든 연도 추출
+    for (let year = start.getFullYear(); year <= end.getFullYear(); year++) {
+      years.push(year)
+    }
+
+    const allHolidays = []
+    years.forEach(year => {
+      const yearHolidays = this.getDefaultKoreanHolidays(year)
+      allHolidays.push(...yearHolidays.holidays)
+    })
+
+    // 날짜 범위에 맞는 공휴일만 필터링
+    const filteredHolidays = allHolidays.filter(holiday => {
+      const holidayDate = new Date(holiday.holidayDate)
+      return holidayDate >= start && holidayDate <= end
+    })
+
+    return {
+      startDate: startDate,
+      endDate: endDate,
+      holidays: filteredHolidays,
+      count: filteredHolidays.length
+    }
+  },
+
+  /**
+   * 모든 캐시 클리어
+   */
+  clearAllCache() {
+    this.cache.clear()
+    console.log('🗑️ 공휴일 캐시 모두 삭제됨')
+  },
+
+  /**
+   * 특정 캐시 키 삭제
+   * @param {string} key - 캐시 키
+   */
+  clearCache(key) {
+    if (this.cache.has(key)) {
+      this.cache.delete(key)
+      console.log(`🗑️ 캐시 삭제: ${key}`)
+    }
+  },
+
+  /**
+   * 캐시 상태 확인
+   */
+  getCacheStatus() {
+    return {
+      size: this.cache.size,
+      keys: Array.from(this.cache.keys()),
+      timeout: this.cacheTimeout
+    }
+  },
+
+  /**
+   * 공공데이터 API와 동기화 (누락된 메서드 추가)
+   * @param {number} year - 동기화할 연도
+   */
+  async syncHolidaysFromPublicAPI(year) {
+    try {
+      const response = await apiClient.post(`/admin/holidays/sync/${year}`)
+
+      // 캐시 무효화
+      this.clearAllCache()
+
+      return response.data
+    } catch (error) {
+      console.error(`${year}년 공휴일 동기화 실패:`, error)
+      throw new Error(`${year}년 공휴일 동기화에 실패했습니다.`)
+    }
+  },
+
+  /**
+   * 폴백 공휴일 데이터 반환 (누락된 메서드 추가)
+   * @param {string} startDate - 시작 날짜
+   * @param {string} endDate - 종료 날짜
+   */
+  getFallbackHolidays(startDate, endDate) {
+    return this.getDefaultKoreanHolidaysForRange(startDate, endDate)
   }
 }
 
@@ -436,7 +395,6 @@ export const holidayUtils = {
   /**
    * 공휴일 타입별 우선순위 반환
    * @param {string} holidayType - 공휴일 타입
-   * @returns {number} 우선순위 (낮을수록 높은 우선순위)
    */
   getHolidayPriority(holidayType) {
     const priorities = {
@@ -444,55 +402,30 @@ export const holidayUtils = {
       'PUBLIC': 2,      // 공휴일
       'SUBSTITUTE': 3,  // 대체공휴일
       'MEMORIAL': 4,    // 기념일
-      'ANNIVERSARY': 5  // 기타
+      'ANNIVERSARY': 5  // 기타 기념일
     }
-
-    return priorities[holidayType] || 999
+    return priorities[holidayType] || 99
   },
 
   /**
-   * 공휴일 타입별 한글 이름 반환
-   * @param {string} holidayType - 공휴일 타입
-   * @returns {string} 한글 이름
-   */
-  getHolidayTypeName(holidayType) {
-    const typeNames = {
-      'NATIONAL': '국경일',
-      'PUBLIC': '공휴일',
-      'SUBSTITUTE': '대체공휴일',
-      'MEMORIAL': '기념일',
-      'ANNIVERSARY': '기타'
-    }
-
-    return typeNames[holidayType] || '기타'
-  },
-
-  /**
-   * 공휴일 타입별 기본 색상 반환
-   * @param {string} holidayType - 공휴일 타입
-   * @returns {string} 색상 코드
-   */
-  getHolidayColor(holidayType) {
-    const colors = {
-      'NATIONAL': '#4285F4',    // 파란색 (국경일)
-      'PUBLIC': '#FF6B6B',      // 빨간색 (공휴일)
-      'SUBSTITUTE': '#FF9800',  // 주황색 (대체공휴일)
-      'MEMORIAL': '#9C27B0',    // 보라색 (기념일)
-      'ANNIVERSARY': '#607D8B'  // 회색 (기타)
-    }
-
-    return colors[holidayType] || '#FF6B6B'
-  },
-
-  /**
-   * 날짜별 공휴일 그룹화
-   * @param {Array} holidays - 공휴일 목록
-   * @returns {Object} 날짜별로 그룹화된 공휴일
+   * 공휴일을 날짜별로 그룹화
+   * @param {Array} holidays - 공휴일 배열
    */
   groupHolidaysByDate(holidays) {
     const grouped = {}
 
+    // 배열이 아니거나 비어있으면 빈 객체 반환
+    if (!Array.isArray(holidays) || holidays.length === 0) {
+      console.warn('공휴일 데이터가 배열이 아니거나 비어있습니다:', holidays)
+      return grouped
+    }
+
     holidays.forEach(holiday => {
+      if (!holiday || !holiday.holidayDate) {
+        console.warn('잘못된 공휴일 데이터:', holiday)
+        return
+      }
+
       const date = holiday.holidayDate
 
       if (!grouped[date]) {
@@ -517,7 +450,6 @@ export const holidayUtils = {
   /**
    * 요일 타입 반환 (일요일/토요일/평일)
    * @param {Date} date - 날짜 객체
-   * @returns {string} 요일 타입
    */
   getDayType(date) {
     const dayOfWeek = date.getDay()
@@ -528,20 +460,8 @@ export const holidayUtils = {
   },
 
   /**
-   * 공휴일 캐시 상태 확인
-   */
-  getCacheStatus() {
-    return {
-      size: holidayAPI.cache.size,
-      keys: Array.from(holidayAPI.cache.keys()),
-      timeout: holidayAPI.cacheTimeout
-    }
-  },
-
-  /**
    * 공휴일 데이터 유효성 검사
    * @param {Object} holidayData - 공휴일 데이터
-   * @returns {Object} 검증 결과
    */
   validateHolidayData(holidayData) {
     const errors = []
@@ -571,3 +491,5 @@ export const holidayUtils = {
     }
   }
 }
+
+export default holidayAPI

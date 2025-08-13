@@ -175,8 +175,8 @@
 <script>
 import ScheduleDetailModal from '@/components/ScheduleDetailModal.vue'
 import { scheduleAPI } from '@/services/api.js'
-import { holidayUtils } from '@/services/holidayAPI.js'
-import { holidayInitUtils } from '@/services/holidayInitializer.js'
+import { holidayAPI, holidayUtils } from '@/services/holidayAPI.js'
+//import { holidayInitUtils } from '@/services/holidayInitializer.js'
 
 export default {
   name: 'DuckHuCalendar',
@@ -336,7 +336,7 @@ export default {
     },
 
     /**
-     * 공휴일 데이터 로드 (새로운 공공데이터 연동 방식)
+     * 공휴일 데이터 로드
      */
     async loadHolidays() {
       if (this.holidayLoading) return
@@ -361,25 +361,28 @@ export default {
 
         console.log('공휴일 데이터 로드 범위:', startDateStr, '~', endDateStr)
 
-        // 공휴일 초기화 및 조회 (새로운 방식)
-        const result = await holidayInitUtils.getHolidaysForCalendar(startDateStr, endDateStr)
+        // 공휴일 API 직접 호출 (초기화 과정 생략)
+        const response = await holidayAPI.getHolidaysByDateRange(startDateStr, endDateStr)
 
-        if (result.success) {
-          this.holidaysByDate = result.holidays
-          console.log(`✅ ${result.totalCount}개의 공휴일을 로드했습니다.`)
-        } else {
-          console.warn(`⚠️ 공휴일 로드 실패, 기본 데이터 사용: ${result.error}`)
-          this.holidaysByDate = result.holidays || {}
+        // API 응답에서 holidays 배열 추출
+        let holidays = []
+        if (response && response.holidays && Array.isArray(response.holidays)) {
+          holidays = response.holidays
+        } else if (Array.isArray(response)) {
+          holidays = response
         }
+
+        // 날짜별 그룹화
+        this.holidaysByDate = holidayUtils.groupHolidaysByDate(holidays)
+
+        console.log(`✅ ${holidays.length}개의 공휴일을 로드했습니다.`)
 
       } catch (error) {
         console.error('❌ 공휴일 로드 실패:', error)
-        this.holidays = []
         this.holidaysByDate = {}
 
         // 사용자에게 친화적인 에러 메시지 표시
-        const userMessage = holidayInitUtils.getErrorMessage(error)
-        console.warn('사용자 메시지:', userMessage)
+        console.warn('⚠️ 공휴일 정보를 불러올 수 없어 기본 정보로 표시됩니다.')
       } finally {
         this.holidayLoading = false
       }

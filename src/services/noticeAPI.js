@@ -1,45 +1,5 @@
-import axios from 'axios'
-
-// API 기본 설정 (Vite 환경)
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
-
-const apiClient = axios.create({
-  baseURL: `${API_BASE_URL}/api`,
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-})
-
-// 요청 인터셉터 - 토큰 자동 추가
-apiClient.interceptors.request.use(
-  (config) => {
-    const token = sessionStorage.getItem('admin-token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  },
-  (error) => {
-    return Promise.reject(error)
-  }
-)
-
-// 응답 인터셉터 - 에러 처리
-apiClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // 인증 오류 시 토큰 제거
-      sessionStorage.removeItem('admin-token')
-    }
-
-    const errorMessage = error.response?.data?.message || error.message || '알 수 없는 오류가 발생했습니다.'
-    error.userMessage = errorMessage
-
-    return Promise.reject(error)
-  }
-)
+// apiClient에서 통합된 클라이언트 가져오기
+import { apiClient } from './apiClient.js'
 
 /**
  * 공지사항 관련 API

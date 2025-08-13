@@ -88,7 +88,7 @@ const router = createRouter({
  * 전역 네비게이션 가드
  * 페이지 이동 전에 실행되는 함수
  */
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   // 페이지 제목 설정
   if (to.meta && to.meta.title) {
     document.title = `${to.meta.title} - Vue 이벤트 캘린더`
@@ -101,31 +101,35 @@ router.beforeEach((to, from, next) => {
     const adminToken = sessionStorage.getItem('admin-token')
 
     if (!adminToken) {
-      console.log('관리자 인증이 필요합니다.')
-
+      console.log('관리자 인증이 필요합니다. 로그인 페이지로 이동합니다.')
       // 관리자 로그인 페이지로 리다이렉트
-      //alert('관리자 인증이 필요합니다. 로그인 페이지로 이동합니다.')
       next('/admin-login')
-    } else {
-      // 토큰이 있으면 인증 확인
-      import('@/services/api.js').then(module => {
-        const { adminAPI } = module
+      return
+    }
 
-        adminAPI.checkAuth()
-          .then(() => {
-            console.log('관리자 인증 성공')
-            next() // 인증 성공시 진행
-          })
-          .catch(error => {
-            console.error('관리자 인증 실패:', error)
-            sessionStorage.removeItem('admin-token')
-            alert('관리자 인증이 만료되었습니다. 다시 로그인해주세요.')
-            next('/admin-login') // 로그인 페이지로 리다이렉트
-          })
-      }).catch(error => {
-        console.error('API 모듈 로드 실패:', error)
-        next(false) // 네비게이션 취소
-      })
+    try {
+      // 동적 import로 API 모듈 로드
+      const { adminAPI } = await import('@/services/api.js')
+
+      // 서버에서 토큰 검증
+      await adminAPI.checkAuth()
+      console.log('✅ 관리자 인증 성공')
+      next() // 인증 성공시 진행
+
+    } catch (error) {
+      console.error('❌ 관리자 인증 실패:', error)
+
+      // 토큰이 만료되었거나 유효하지 않음
+      sessionStorage.removeItem('admin-token')
+
+      // 사용자에게 알림
+      if (error.message.includes('401') || error.message.includes('403')) {
+        alert('관리자 인증이 만료되었습니다. 다시 로그인해주세요.')
+      } else {
+        alert('인증 확인 중 오류가 발생했습니다. 다시 로그인해주세요.')
+      }
+
+      next('/admin-login') // 로그인 페이지로 리다이렉트
     }
   } else {
     // 인증이 필요없는 페이지는 바로 진행

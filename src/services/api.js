@@ -1,79 +1,8 @@
-import axios from 'axios'
-
-// API 기본 설정
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
-
-// Axios 인스턴스 생성
-const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-})
-
-// 요청 인터셉터
-apiClient.interceptors.request.use(
-  (config) => {
-    console.log(`🚀 API 요청: ${config.method?.toUpperCase()} ${config.url}`)
-
-    // 세션 스토리지에서 관리자 토큰 가져오기
-    const adminToken = sessionStorage.getItem('admin-token')
-
-    // 토큰이 있으면 Authorization 헤더에 추가
-    if (adminToken) {
-      config.headers.Authorization = `Bearer ${adminToken}`
-      console.log('🔐 토큰 추가됨')
-    }
-
-    return config
-  },
-  (error) => {
-    console.error('❌ API 요청 오류:', error)
-    return Promise.reject(error)
-  }
-)
-
-// 응답 인터셉터
-apiClient.interceptors.response.use(
-  (response) => {
-    console.log(`✅ API 응답: ${response.config.method?.toUpperCase()} ${response.config.url}`)
-    return response
-  },
-  (error) => {
-    console.error('❌ API 응답 오류:', error)
-
-    // 표준화된 에러 메시지
-    const errorMessage = error.response?.data?.message ||
-                        error.response?.data?.error ||
-                        error.message ||
-                        '알 수 없는 오류가 발생했습니다.'
-
-    // 사용자 친화적 에러 메시지 설정
-    if (error.response?.status === 401) {
-      error.userMessage = '인증이 필요합니다. 다시 로그인해주세요.'
-      // 관리자 토큰 제거
-      sessionStorage.removeItem('admin-token')
-    } else if (error.response?.status === 403) {
-      error.userMessage = '접근 권한이 없습니다.'
-    } else if (error.response?.status === 404) {
-      error.userMessage = '요청한 리소스를 찾을 수 없습니다.'
-    } else if (error.response?.status === 429) {
-      error.userMessage = '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.'
-    } else if (error.response?.status >= 500) {
-      error.userMessage = '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
-    } else if (error.code === 'NETWORK_ERROR' || error.code === 'ECONNABORTED') {
-      error.userMessage = '네트워크 연결을 확인해주세요.'
-    } else {
-      error.userMessage = errorMessage
-    }
-
-    return Promise.reject(error)
-  }
-)
+// apiClient에서 통합된 클라이언트 가져오기
+import { apiClient } from './apiClient.js'
 
 /**
- * 공휴일 관련 API (공공 API 직접 호출)
+ * 공휴일 관련 API (기존 api.js에서 통합된 holidayAPI)
  */
 export const holidayAPI = {
 
@@ -160,7 +89,7 @@ export const holidayAPI = {
       { name: '어린이날', month: 5, day: 5, description: '어린이날' },
       { name: '현충일', month: 6, day: 6, description: '호국영령 추념일' },
       { name: '광복절', month: 8, day: 15, description: '일제강점기 해방 기념일' },
-      { name: '개천절', month: 10, day: 3, description: '단군왕검 건국 기념일' },
+      { name: '개천절', month: 10, day: 3, description: '단군�검 건국 기념일' },
       { name: '한글날', month: 10, day: 9, description: '한글 창제 기념일' },
       { name: '크리스마스', month: 12, day: 25, description: '성탄절' }
     ]
@@ -217,32 +146,32 @@ export const scheduleAPI = {
    * 모든 일정 조회 (재시도 로직 포함)
    */
   async getAllSchedules() {
-  const maxRetries = 3;
-  let retryCount = 0;
+    const maxRetries = 3;
+    let retryCount = 0;
 
-  while (retryCount < maxRetries) {
-    try {
-      console.log(`📡 일정 조회 시도 ${retryCount + 1}/${maxRetries}...`);
-      const response = await apiClient.get('/schedules');
-      console.log('✅ 일정 조회 성공!');
-      return response.data;
+    while (retryCount < maxRetries) {
+      try {
+        console.log(`📡 일정 조회 시도 ${retryCount + 1}/${maxRetries}...`);
+        const response = await apiClient.get('/schedules');
+        console.log('✅ 일정 조회 성공!');
+        return response.data;
 
-    } catch (error) {
-      retryCount++;
-      console.warn(`❌ 일정 조회 실패 (${retryCount}/${maxRetries}):`, error.message);
+      } catch (error) {
+        retryCount++;
+        console.warn(`❌ 일정 조회 실패 (${retryCount}/${maxRetries}):`, error.message);
 
-      // 최대 재시도 횟수에 도달한 경우
-      if (retryCount >= maxRetries) {
-        console.error('🚨 최대 재시도 횟수 초과. 에러 발생.');
-        throw new Error(error.userMessage || '일정을 불러오는데 실패했습니다.');
+        // 최대 재시도 횟수에 도달한 경우
+        if (retryCount >= maxRetries) {
+          console.error('🚨 최대 재시도 횟수 초과. 에러 발생.');
+          throw new Error(error.userMessage || '일정을 불러오는데 실패했습니다.');
+        }
+
+        // 재시도 전 대기 (500ms, 1s, 1.5s)
+        const delayMs = 500 * retryCount;
+        console.log(`⏳ ${delayMs}ms 후 재시도...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
       }
-
-      // 재시도 전 대기 (500ms, 1s, 1.5s)
-      const delayMs = 500 * retryCount;
-      console.log(`⏳ ${delayMs}ms 후 재시도...`);
-      await new Promise(resolve => setTimeout(resolve, delayMs));
     }
-  }
   },
 
   /**
@@ -316,12 +245,12 @@ export const scheduleAPI = {
    * @param {string} year - 연도
    * @param {string} month - 월
    */
-  getSchedulesByMonth: async (year, month) => {
+  async getSchedulesByMonth(year, month) {
     try {
       console.log(`📅 ${year}년 ${month}월 일정 조회 중...`);
 
       // PathVariable 방식 사용
-      const response = await axios.get(`${API_BASE_URL}/schedules/month/${year}/${month}`);
+      const response = await apiClient.get(`/schedules/month/${year}/${month}`);
 
       console.log(`✅ ${year}년 ${month}월 일정 ${response.data.count}개 조회 완료`);
       return response.data;
@@ -407,21 +336,7 @@ export const scheduleAPI = {
   },
 
   /**
-   * 추천 이벤트 토글 (관리자 전용)
-   * @param {number} id - 일정 ID
-   * @param {boolean} isFeatured - 추천 여부
-   */
-  async toggleFeatured(id, isFeatured) {
-    try {
-      const response = await apiClient.patch(`/schedules/${id}/featured`, { isFeatured })
-      return response.data
-    } catch (error) {
-      throw new Error(error.userMessage || '추천 설정 변경에 실패했습니다.')
-    }
-  },
-
-  /**
-   * 일정 통계 조회 (관리자 전용)
+   * 일정 통계 조회 (관리자용)
    */
   async getScheduleStats() {
     try {
@@ -433,20 +348,7 @@ export const scheduleAPI = {
   },
 
   /**
-   * 인기 이벤트 목록 조회
-   * @param {number} limit - 최대 개수
-   */
-  async getPopularSchedules(limit = 10) {
-    try {
-      const response = await apiClient.get(`/schedules/popular?limit=${limit}`)
-      return response.data
-    } catch (error) {
-      throw new Error(error.userMessage || '인기 이벤트를 불러오는데 실패했습니다.')
-    }
-  },
-
-  /**
-   * 최근 추가된 이벤트 조회
+   * 최근 추가된 일정 조회
    * @param {number} limit - 최대 개수
    */
   async getRecentSchedules(limit = 10) {
@@ -454,184 +356,42 @@ export const scheduleAPI = {
       const response = await apiClient.get(`/schedules/recent?limit=${limit}`)
       return response.data
     } catch (error) {
-      throw new Error(error.userMessage || '최근 이벤트를 불러오는데 실패했습니다.')
+      throw new Error(error.userMessage || '최근 일정을 불러오는데 실패했습니다.')
     }
-  },
-
-  /**
-   * 조회수 증가
-   * @param {number} id - 일정 ID
-   */
-  async incrementViewCount(id) {
-    try {
-      const response = await apiClient.post(`/schedules/${id}/view`)
-      return response.data
-    } catch (error) {
-      throw new Error(error.userMessage || '조회수 증가에 실패했습니다.')
-    }
-  },
-}
-
-/**
- * 이벤트 요청 관련 API
- */
-export const eventRequestAPI = {
-  /**
-   * 이벤트 요청 제출 (일반 사용자)
-   * @param {Object} requestData - 요청 데이터
-   */
-  async submitEventRequest(requestData) {
-    try {
-      // eventData를 JSON 문자열로 변환
-      const payload = {
-        requestType: requestData.requestType || 'ADD',
-        requesterEmail: requestData.requesterEmail,
-        eventData: JSON.stringify({
-          title: requestData.title,
-          description: requestData.description,
-          proposedDate: requestData.proposedDate,
-          category: requestData.category,
-          targetEvent: requestData.targetEvent
-        })
-      }
-
-      const response = await apiClient.post('/event-requests/submit', payload)
-      return response.data
-    } catch (error) {
-      throw new Error(error.userMessage || '이벤트 요청 제출에 실패했습니다.')
-    }
-  },
-
-  /**
-   * 이벤트 요청 목록 조회 (관리자 전용)
-   * 수정: 올바른 경로 사용
-   */
-  async getEventRequests() {
-    try {
-      const response = await apiClient.get('/event-requests/admin/list')  // 올바른 경로
-      return response.data
-    } catch (error) {
-      throw new Error(error.userMessage || '이벤트 요청 목록을 불러오는데 실패했습니다.')
-    }
-  },
-
-  /**
-   * 이벤트 요청 처리 (관리자 전용)
-   * @param {number} id - 요청 ID
-   * @param {string} status - 상태 (APPROVED, REJECTED)
-   * @param {string} response - 관리자 응답
-   */
-  async processEventRequest(id, status, response) {
-    try {
-      const responseData = await apiClient.patch(`/event-requests/${id}/process`, {
-        status,
-        adminResponse: response
-      })
-      return responseData.data
-    } catch (error) {
-      throw new Error(error.userMessage || '이벤트 요청 처리에 실패했습니다.')
-    }
-  },
-
-
-  /**
-   * 이벤트 요청 제출 (일반 사용자)
-   * @param {Object} requestData - 요청 데이터
-   */
-  async submitRequest(requestData) {
-    try {
-      const response = await apiClient.post('/event-requests/submit', requestData)
-      return response.data
-    } catch (error) {
-      throw new Error(error.userMessage || '구독자 목록을 불러오는데 실패했습니다.')
-    }
-  },
-
-  /**
-   * 구독자 삭제 (관리자 전용)
-   * @param {number} subscriberId - 구독자 ID
-   */
-  async deleteSubscriber(subscriberId) {
-    try {
-      const response = await apiClient.delete(`/email-subscriptions/${subscriberId}`)
-      return response.data
-    } catch (error) {
-      throw new Error(error.userMessage || '구독자 삭제에 실패했습니다.')
-    }
-  },
-
-  /**
-   * 구독 상태 변경 (관리자 전용)
-   * @param {number} subscriberId - 구독자 ID
-   * @param {boolean} isActive - 활성화 상태
-   */
-  async updateSubscriberStatus(subscriberId, isActive) {
-    try {
-      const response = await apiClient.patch(`/email-subscriptions/${subscriberId}/status`, { isActive })
-      return response.data
-    } catch (error) {
-      throw new Error(error.userMessage || '구독 상태 변경에 실패했습니다.')
-    }
-  },
-
-  /**
-   * 이벤트 요청 상태 업데이트 (관리자 전용)
-   * @param {number} requestId - 요청 ID
-   * @param {string} status - 상태 (APPROVED, REJECTED)
-   */
-  async updateRequestStatus(requestId, status) {
-    try {
-      const response = await apiClient.put(
-        `/event-requests/admin/${requestId}/status?status=${status}`
-      )
-      return response.data
-    } catch (error) {
-      throw new Error(error.userMessage || '요청 상태 업데이트에 실패했습니다.')
-    }
-  },
-
-  /**
-   * 이메일 인증 코드 전송
-   * @param {string} email - 이메일 주소
-   */
-  async sendVerificationCode(email) {
-    try {
-      const response = await apiClient.post('/event-requests/send-verification', { email })
-      return response.data
-    } catch (error) {
-      throw new Error(error.userMessage || '인증 코드 전송에 실패했습니다.')
-    }
-  },
-
-  /**
-   * 이메일 인증 확인
-   * @param {string} email - 이메일
-   * @param {string} code - 인증 코드
-   */
-  async verifyEmail(email, code) {
-    try {
-      const response = await apiClient.post('/event-requests/verify-email', { email, code })
-      return response.data
-    } catch (error) {
-      throw new Error(error.userMessage || '이메일 인증에 실패했습니다.')
-    }
-  },
+  }
 }
 
 /**
  * 이메일 구독 관련 API
  */
 export const emailSubscriptionAPI = {
+
   /**
-   * 이메일 구독 신청
-   * @param {Object} subscriptionData - 구독 데이터
+   * 이메일 구독 등록
+   * @param {Object} subscriptionData - 구독 정보
+   * @param {string} subscriptionData.email - 이메일 주소
+   * @param {string} subscriptionData.name - 구독자 이름
+   * @param {Array} subscriptionData.preferences - 구독 설정
    */
   async subscribe(subscriptionData) {
     try {
       const response = await apiClient.post('/email-subscriptions', subscriptionData)
       return response.data
     } catch (error) {
-      throw new Error(error.userMessage || '이메일 구독 신청에 실패했습니다.')
+      throw new Error(error.userMessage || '이메일 구독 등록에 실패했습니다.')
+    }
+  },
+
+  /**
+   * 구독 확인 (이메일 토큰 인증)
+   * @param {string} token - 인증 토큰
+   */
+  async confirmSubscription(token) {
+    try {
+      const response = await apiClient.post(`/email-subscriptions/confirm/${token}`)
+      return response.data
+    } catch (error) {
+      throw new Error(error.userMessage || '구독 확인에 실패했습니다.')
     }
   },
 
@@ -861,6 +621,118 @@ export const fileAPI = {
       return response.data
     } catch (error) {
       throw new Error(error.userMessage || '파일 삭제에 실패했습니다.')
+    }
+  }
+}
+
+/**
+ * 이벤트 요청 관련 API
+ */
+export const eventRequestAPI = {
+
+  /**
+   * 이메일 인증 코드 전송
+   * @param {string} email - 이메일 주소
+   */
+  async sendVerificationCode(email) {
+    try {
+      const response = await apiClient.post('/event-requests/send-verification', { email })
+      return response.data
+    } catch (error) {
+      throw new Error(error.userMessage || '인증 코드 전송에 실패했습니다.')
+    }
+  },
+
+  /**
+   * 이메일 인증
+   * @param {string} email - 이메일 주소
+   * @param {string} code - 인증 코드
+   */
+  async verifyEmail(email, code) {
+    try {
+      const response = await apiClient.post('/event-requests/verify-email', { email, code })
+      return response.data
+    } catch (error) {
+      throw new Error(error.userMessage || '이메일 인증에 실패했습니다.')
+    }
+  },
+
+  /**
+   * 이벤트 요청 제출
+   * @param {Object} requestData - 요청 데이터
+   */
+  async submitEventRequest(requestData) {
+    try {
+      const response = await apiClient.post('/event-requests', requestData)
+      return response.data
+    } catch (error) {
+      throw new Error(error.userMessage || '이벤트 요청 제출에 실패했습니다.')
+    }
+  },
+
+  /**
+   * 이벤트 요청 목록 조회 (관리자용)
+   */
+  async getEventRequests() {
+    try {
+      const response = await apiClient.get('/event-requests/admin')
+      return response.data
+    } catch (error) {
+      throw new Error(error.userMessage || '이벤트 요청 목록을 불러오는데 실패했습니다.')
+    }
+  },
+
+  /**
+   * 이벤트 요청 상세 조회 (관리자용)
+   * @param {number} id - 요청 ID
+   */
+  async getEventRequestById(id) {
+    try {
+      const response = await apiClient.get(`/event-requests/admin/${id}`)
+      return response.data
+    } catch (error) {
+      throw new Error(error.userMessage || '이벤트 요청을 불러오는데 실패했습니다.')
+    }
+  },
+
+  /**
+   * 이벤트 요청 상태 변경 (관리자용)
+   * @param {number} id - 요청 ID
+   * @param {string} status - 상태 (pending, approved, rejected)
+   */
+  async updateRequestStatus(id, status) {
+    try {
+      const response = await apiClient.patch(`/event-requests/admin/${id}/status`, { status })
+      return response.data
+    } catch (error) {
+      throw new Error(error.userMessage || '요청 상태 변경에 실패했습니다.')
+    }
+  },
+
+  /**
+   * 이벤트 요청 삭제 (관리자용)
+   * @param {number} id - 요청 ID
+   */
+  async deleteEventRequest(id) {
+    try {
+      const response = await apiClient.delete(`/event-requests/admin/${id}`)
+      return response.data
+    } catch (error) {
+      throw new Error(error.userMessage || '이벤트 요청 삭제에 실패했습니다.')
+    }
+  },
+
+  /**
+   * 이벤트 요청 승인 처리 (관리자용)
+   * @param {number} id - 요청 ID
+   * @param {Object} scheduleData - 일정 데이터
+   */
+  async approveEventRequest(id, scheduleData) {
+    try {
+      const response = await apiClient.post(`/event-requests/admin/${id}/approve`, scheduleData)
+      return response.data
+    } catch (error) {
+      throw new Error(error.userMessage || '이벤트 요청 승인에 실패했습니다.')
     }
   }
 }
