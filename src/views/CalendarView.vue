@@ -13,30 +13,54 @@
         <div class="desktop-sidebar">
           <!-- 1. 공지사항 -->
           <div class="sidebar-card notice-card">
-            <h3>📢 공지사항</h3>
-            <div class="notice-content">
-              <div class="notice-item">
-                <div class="notice-text">🎉 DuckHu Calendar에 오신 것을 환영합니다!</div>
-                <div class="notice-date">2025.08.12</div>
+            <div class="sidebar-header">
+              <h3>📢 공지사항</h3>
+              <button v-if="!loadingSidebar" @click="refreshData" class="refresh-btn" title="새로고침">
+                🔄
+              </button>
+            </div>
+
+            <!-- 로딩 상태 -->
+            <div v-if="loadingSidebar" class="loading-state">
+              <div class="loading-spinner"></div>
+              <div class="loading-text">로딩 중...</div>
+            </div>
+
+            <!-- 공지사항 목록 -->
+            <div v-else-if="notices.length > 0" class="notice-list">
+              <div
+                v-for="notice in notices"
+                :key="notice.id"
+                class="notice-item"
+                @click="showNoticeDetail(notice)"
+              >
+                <div class="notice-content">
+                  <div class="notice-title">{{ notice.title }}</div>
+                  <div class="notice-date">{{ formatNoticeDate(notice) }}</div>
+                </div>
+                <div class="notice-priority" v-if="notice.priority > 0">
+                  <span class="priority-badge">중요</span>
+                </div>
               </div>
-              <div class="notice-item">
-                <div class="notice-text">새로운 연속 일정 표시 기능이 추가되었습니다.</div>
-                <div class="notice-date">2025.08.10</div>
-              </div>
+            </div>
+
+            <!-- 공지사항 없음 -->
+            <div v-else class="no-content">
+              현재 공지사항이 없습니다
             </div>
           </div>
 
-          <!-- 2. 다가올 이벤트 -->
+          <!-- 2. 다가올 이벤트 (개선된 버전) -->
           <div class="sidebar-card">
             <div class="sidebar-header">
               <h3>📅 다가올 이벤트</h3>
-              <button v-if="!loading" @click="refreshData" class="refresh-btn" title="새로고침">
+              <button v-if="!loadingSidebar" @click="refreshData" class="refresh-btn" title="새로고침">
                 🔄
               </button>
             </div>
             <div class="upcoming-events">
               <!-- 로딩 상태 -->
-              <div v-if="loading" class="loading-state">
+              <div v-if="loadingSidebar" class="loading-state">
                 <div class="loading-spinner"></div>
                 <div class="loading-text">로딩 중...</div>
               </div>
@@ -48,39 +72,51 @@
               </div>
               <!-- 정상 데이터 -->
               <div v-else-if="upcomingEvents.length > 0" class="event-list">
-                <div v-for="event in upcomingEvents" :key="event.id" class="event-item">
+                <div v-for="event in upcomingEvents" :key="event.id" class="event-item upcoming" @click="showEventDetail(event)">
                   <div class="event-date">{{ formatEventDate(event) }}</div>
-                  <div class="event-title">{{ event.title }}</div>
-                  <div class="event-time" v-if="event.startTime">{{ event.startTime }}</div>
+                  <div class="event-content">
+                    <div class="event-title">{{ event.title }}</div>
+                    <div class="event-time">{{ formatEventTime(event) }}</div>
+                  </div>
+                  <div class="event-color" :style="{ backgroundColor: event.color || '#007bff' }"></div>
+                  <div v-if="event.isFeatured" class="featured-badge">⭐</div>
                 </div>
               </div>
               <!-- 빈 상태 -->
-              <div v-else class="no-events">
-                다가올 이벤트가 없습니다.
+              <div v-else class="no-content">
+                예정된 이벤트가 없습니다
               </div>
             </div>
           </div>
 
-          <!-- 3. 최신 추가된 이벤트 -->
+          <!-- 3. 최신 추가된 이벤트 (개선된 버전) -->
           <div class="sidebar-card">
             <h3>✨ 최신 이벤트</h3>
             <div class="recent-events">
               <!-- 로딩 상태 -->
-              <div v-if="loading" class="loading-state">
+              <div v-if="loadingSidebar" class="loading-state">
                 <div class="loading-spinner"></div>
                 <div class="loading-text">로딩 중...</div>
               </div>
               <!-- 정상 데이터 -->
               <div v-else-if="recentEvents.length > 0" class="event-list">
-                <div v-for="event in recentEvents" :key="event.id" class="event-item">
-                  <div class="event-date">{{ formatEventDate(event) }}</div>
-                  <div class="event-title">{{ event.title }}</div>
-                  <div class="event-badge">NEW</div>
+                <div v-for="event in recentEvents" :key="event.id" class="event-item recent" @click="showEventDetail(event)">
+                  <div class="event-content">
+                    <div class="event-title">{{ event.title }}</div>
+                    <div class="event-meta">
+                      <span class="event-date">{{ formatEventDate(event) }}</span>
+                      <span class="event-new">NEW</span>
+                    </div>
+                  </div>
+                  <div class="event-thumbnail" v-if="event.images && event.images.length > 0">
+                    <img :src="event.images[0]" :alt="event.title" />
+                  </div>
+                  <div v-else class="event-color" :style="{ backgroundColor: event.color || '#28a745' }"></div>
                 </div>
               </div>
               <!-- 빈 상태 -->
-              <div v-else class="no-events">
-                최근 추가된 이벤트가 없습니다.
+              <div v-else class="no-content">
+                최근 추가된 이벤트가 없습니다
               </div>
             </div>
           </div>
@@ -160,6 +196,7 @@
 <script>
 import DuckHuCalendar from '@/components/DuckHuCalendar.vue'
 import { scheduleAPI } from '@/services/api.js'
+import { noticeAPI } from '@/services/noticeAPI.js'
 
 export default {
   name: 'CalendarView',
@@ -172,10 +209,12 @@ export default {
     return {
       showMenu: false,
 
-      // 실제 데이터로 변경
+      // 사이드바 데이터
       upcomingEvents: [],
       recentEvents: [],
+      notices: [], // 공지사항 추가
       loading: false,
+      loadingSidebar: false, // 사이드바 전용 로딩
       error: null
     }
   },
@@ -191,99 +230,129 @@ export default {
 
   methods: {
     /**
-     * 사이드바 데이터 로드
+     * 사이드바 데이터 로딩 개선
      */
     async loadSidebarData() {
-      this.loading = true
+      if (this.loadingSidebar) return
+
+      this.loadingSidebar = true
       this.error = null
 
       try {
-        // 병렬로 데이터 로드
-        await Promise.all([
+        // 병렬로 모든 데이터 로드
+        const [upcomingData, recentData, noticesData] = await Promise.allSettled([
           this.loadUpcomingEvents(),
-          this.loadRecentEvents()
+          this.loadRecentEvents(),
+          this.loadNotices()
         ])
 
+        // 다가오는 이벤트 처리
+        if (upcomingData.status === 'fulfilled') {
+          this.upcomingEvents = upcomingData.value
+        } else {
+          console.error('다가오는 이벤트 로드 실패:', upcomingData.reason)
+          this.upcomingEvents = []
+        }
+
+        // 최근 이벤트 처리
+        if (recentData.status === 'fulfilled') {
+          this.recentEvents = recentData.value
+        } else {
+          console.error('최근 이벤트 로드 실패:', recentData.reason)
+          this.recentEvents = []
+        }
+
+        // 공지사항 처리
+        if (noticesData.status === 'fulfilled') {
+          this.notices = noticesData.value
+        } else {
+          console.error('공지사항 로드 실패:', noticesData.reason)
+          this.notices = []
+        }
+
         console.log('✅ 사이드바 데이터 로드 완료')
+
       } catch (error) {
-        console.error('❌ 사이드바 데이터 로드 실패:', error)
+        console.error('❌ 사이드바 데이터 로딩 중 오류:', error)
         this.error = '데이터를 불러오는데 실패했습니다.'
       } finally {
-        this.loading = false
+        this.loadingSidebar = false
       }
     },
 
     /**
-     * 다가올 이벤트 로드
+     * 다가오는 이벤트 로드 (최대 2개)
      */
     async loadUpcomingEvents() {
       try {
         const today = new Date()
-        const nextMonth = new Date(today)
-        nextMonth.setMonth(nextMonth.getMonth() + 1)
+        const futureDate = new Date(today)
+        futureDate.setDate(futureDate.getDate() + 30) // 30일 후까지
 
-        // 날짜를 문자열로 변환
         const startDateStr = this.formatDate(today)
-        const endDateStr = this.formatDate(nextMonth)
+        const endDateStr = this.formatDate(futureDate)
 
-        console.log('다가올 이벤트 날짜 범위:', startDateStr, '~', endDateStr)
+        console.log('다가오는 이벤트 날짜 범위:', startDateStr, '~', endDateStr)
 
         const response = await scheduleAPI.getSchedulesByDateRange({
           startDate: startDateStr,
           endDate: endDateStr
         })
 
-        // 오늘 이후의 일정만 필터링하고 시작일순 정렬
-        this.upcomingEvents = (response.schedules || response || [])
-          .filter(schedule => schedule.startDate >= startDateStr)
+        // 오늘 이후의 일정만 필터링하고 정렬
+        const upcomingEvents = (response.schedules || response || [])
+          .filter(schedule => {
+            const scheduleDate = new Date(schedule.startDate)
+            return scheduleDate >= today
+          })
           .sort((a, b) => {
-            // 시작일순 정렬
+            // 1차: 날짜순
             const dateCompare = a.startDate.localeCompare(b.startDate)
             if (dateCompare !== 0) return dateCompare
 
-            // 같은 날이면 우선순위순
+            // 2차: 우선순위순 (높은 순)
             if (a.priority !== b.priority) {
-              return a.priority - b.priority
+              return (a.priority || 3) - (b.priority || 3)
             }
 
-            // 시간순 (시간이 있는 경우)
+            // 3차: 시간순
             if (a.startTime && b.startTime) {
               return a.startTime.localeCompare(b.startTime)
             }
 
             return 0
           })
-          .slice(0, 5) // 최대 5개까지만
+          .slice(0, 2) // 최대 2개만
 
-        console.log(`📅 다가올 이벤트 ${this.upcomingEvents.length}개 로드`)
+        console.log(`📅 다가오는 이벤트 ${upcomingEvents.length}개 로드`)
+        return upcomingEvents
+
       } catch (error) {
-        console.error('다가올 이벤트 로드 실패:', error)
-        this.upcomingEvents = []
+        console.error('다가오는 이벤트 로드 실패:', error)
+        return []
       }
     },
 
     /**
-     * 최신 이벤트 로드
+     * 최근 추가된 이벤트 로드 (최대 2개)
      */
     async loadRecentEvents() {
       try {
-        // 최근 생성된 일정 조회 API가 있는지 확인
+        // 최근 생성된 일정 조회
         let response
         try {
-          response = await scheduleAPI.getRecentSchedules(5)
+          response = await scheduleAPI.getRecentSchedules(10) // 10개 조회 후 필터링
         // eslint-disable-next-line no-unused-vars
-        } catch (recentApiError) {
+        } catch (apiError) {
           console.log('최신 일정 API 없음, 대체 방법 사용')
 
-          // 최신 일정 API가 없는 경우 최근 1개월 데이터에서 추출
+          // 대체 방법: 최근 30일 데이터에서 추출
           const today = new Date()
-          const oneMonthAgo = new Date(today)
-          oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1)
+          const thirtyDaysAgo = new Date(today)
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-          const startDateStr = this.formatDate(oneMonthAgo)
+          const startDateStr = this.formatDate(thirtyDaysAgo)
           const endDateStr = this.formatDate(today)
-
-          console.log('최신 이벤트 대체 날짜 범위:', startDateStr, '~', endDateStr)
 
           response = await scheduleAPI.getSchedulesByDateRange({
             startDate: startDateStr,
@@ -291,19 +360,68 @@ export default {
           })
         }
 
-        this.recentEvents = (response.schedules || response || [])
+        // 최신 이벤트 정렬 및 필터링
+        const recentEvents = (response.schedules || response || [])
           .sort((a, b) => {
             // 생성일순 정렬 (최신순)
             const createdAtA = new Date(a.createdAt || a.startDate)
             const createdAtB = new Date(b.createdAt || b.startDate)
             return createdAtB - createdAtA
           })
-          .slice(0, 3) // 최대 3개까지만
+          .slice(0, 2) // 최대 2개만
 
-        console.log(`✨ 최신 이벤트 ${this.recentEvents.length}개 로드`)
+        console.log(`✨ 최신 이벤트 ${recentEvents.length}개 로드`)
+        return recentEvents
+
       } catch (error) {
         console.error('최신 이벤트 로드 실패:', error)
-        this.recentEvents = []
+        return []
+      }
+    },
+
+    /**
+     * 공지사항 로드 (최대 2개)
+     */
+    async loadNotices() {
+      try {
+        const response = await noticeAPI.getActiveNotices(2)
+        const notices = response.notices || []
+
+        console.log(`📢 공지사항 ${notices.length}개 로드`)
+        return notices
+
+      } catch (error) {
+        console.error('공지사항 로드 실패:', error)
+
+        // 공지사항 API가 구현되지 않은 경우 기본 공지사항 반환
+        if (error.message.includes('400') ||
+            error.message.includes('404') ||
+            error.message.includes('CORS') ||
+            error.message.includes('잘못된 요청') ||
+            error.message.includes('서버에 공지사항 API가 구현되지 않았을')) {
+
+          console.log('📢 공지사항 API 연결 실패, 기본 공지사항 사용')
+          return [
+            {
+              id: 1,
+              title: '🎉 DuckHu Calendar에 오신 것을 환영합니다!',
+              content: '새로운 일정 관리 시스템이 시작되었습니다.',
+              createdAt: new Date().toISOString(),
+              priority: 1,
+              isActive: true
+            },
+            {
+              id: 2,
+              title: '📅 새로운 기능이 추가되었습니다',
+              content: '이제 이벤트에 이미지와 링크를 추가할 수 있습니다.',
+              createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 어제
+              priority: 0,
+              isActive: true
+            }
+          ]
+        }
+
+        return []
       }
     },
 
@@ -351,6 +469,25 @@ export default {
     },
 
     /**
+     * 공지사항 상세보기
+     */
+    showNoticeDetail(notice) {
+      // 간단한 알림으로 표시 (추후 모달로 개선 가능)
+      const content = notice.content || '내용이 없습니다.'
+      const message = `📢 ${notice.title}\n\n${content}\n\n작성일: ${this.formatNoticeDate(notice)}`
+
+      alert(message)
+    },
+
+    /**
+     * 이벤트 상세보기
+     */
+    showEventDetail(event) {
+      // TODO: 이벤트 상세 모달 구현
+      alert(`📅 ${event.title}\n\n날짜: ${this.formatEventDate(event)}\n시간: ${this.formatEventTime(event)}`)
+    },
+
+    /**
      * 날짜 형식 변환 (YYYY-MM-DD)
      */
     formatDate(date) {
@@ -387,6 +524,48 @@ export default {
       } else {
         return `${date.getFullYear()}년 ${month}월 ${day}일`
       }
+    },
+
+    /**
+     * 이벤트 시간 포맷팅
+     */
+    formatEventTime(event) {
+      if (!event.startTime) {
+        return '종일'
+      }
+
+      if (event.endTime) {
+        return `${event.startTime} - ${event.endTime}`
+      }
+
+      return event.startTime
+    },
+
+    /**
+     * 공지사항 날짜 포맷팅
+     */
+    formatNoticeDate(notice) {
+      const date = new Date(notice.createdAt)
+      const today = new Date()
+
+      // 오늘 날짜인지 확인
+      if (date.toDateString() === today.toDateString()) {
+        return '오늘'
+      }
+
+      // 어제 날짜인지 확인
+      const yesterday = new Date(today)
+      yesterday.setDate(yesterday.getDate() - 1)
+      if (date.toDateString() === yesterday.toDateString()) {
+        return '어제'
+      }
+
+      // 올해인지 확인
+      if (date.getFullYear() === today.getFullYear()) {
+        return `${date.getMonth() + 1}.${date.getDate()}`
+      }
+
+      return `${date.getFullYear()}.${date.getMonth() + 1}.${date.getDate()}`
     },
 
     /**
@@ -513,13 +692,62 @@ export default {
   overflow-y: auto;
 }
 
+/* 이벤트 아이템 */
 .event-item {
-  padding: 8px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  border-left: 3px solid #667eea;
+  cursor: pointer;
   position: relative;
-  transition: all 0.2s ease;
+}
+
+.event-item.upcoming {
+  border-left-color: #007bff;
+}
+
+.event-item.recent {
+  border-left-color: #28a745;
+}
+
+.featured-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 12px;
+}
+
+.event-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.event-new {
+  background: #28a745;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.event-thumbnail {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.event-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.event-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .event-item:hover {
@@ -566,6 +794,16 @@ export default {
   font-size: 12px;
   padding: 16px;
   font-style: italic;
+}
+
+/* 빈 상태 */
+.no-content {
+  text-align: center;
+  color: #666;
+  font-size: 12px;
+  padding: 16px;
+  font-style: italic;
+  opacity: 0.8;
 }
 
 /* 광고 영역 */
@@ -847,7 +1085,7 @@ export default {
   background: rgba(255, 255, 255, 0.5);
 }
 
-/* 사이드바 헤더 (새로고침 버튼 포함) */
+/* 사이드바 헤더 */
 .sidebar-header {
   display: flex;
   justify-content: space-between;
@@ -868,14 +1106,74 @@ export default {
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 14px;
   padding: 4px;
   border-radius: 4px;
-  transition: background 0.2s ease;
+  transition: all 0.2s ease;
+  opacity: 0.7;
 }
 
 .refresh-btn:hover {
-  background: #f0f0f0;
+  background: rgba(0, 0, 0, 0.1);
+  opacity: 1;
+  transform: rotate(180deg);
+}
+
+/* 공지사항 */
+.notice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notice-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-left: 3px solid #f39c12;
+}
+
+.notice-item:hover {
+  background: rgba(255, 255, 255, 0.95);
+  transform: translateX(4px);
+}
+
+.notice-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.notice-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notice-date {
+  font-size: 10px;
+  color: #666;
+}
+
+.notice-priority {
+  flex-shrink: 0;
+}
+
+.priority-badge {
+  background: #dc3545;
+  color: white;
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: 600;
 }
 
 /* 로딩 상태 */
