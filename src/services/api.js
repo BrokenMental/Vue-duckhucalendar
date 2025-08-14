@@ -340,6 +340,20 @@ export const scheduleAPI = {
     } catch (error) {
       throw new Error(error.userMessage || '최근 일정을 불러오는데 실패했습니다.')
     }
+  },
+
+  /**
+   * 최근 활동 조회 (관리자용)
+   * @param {number} limit - 최대 개수
+   */
+  async getRecentActivity(limit = 10) {
+    try {
+      const response = await apiClient.get(`/schedules/recent-activity?limit=${limit}`)
+      return response.data
+    } catch (error) {
+      console.warn('최근 활동 API 호출 실패:', error)
+      return { activities: [] } // 빈 배열 반환
+    }
   }
 }
 
@@ -437,10 +451,12 @@ export const emailSubscriptionAPI = {
    */
   async getActiveSubscribers() {
     try {
-      const response = await apiClient.get('/email-subscriptions/active')
+      // 기존 /admin 엔드포인트 사용
+      const response = await apiClient.get('/email-subscriptions/admin')
       return response.data
     } catch (error) {
-      throw new Error(error.userMessage || '활성 구독자 목록을 불러오는데 실패했습니다.')
+      console.warn('구독자 API 호출 실패:', error)
+      return { subscribers: [] } // 빈 배열 반환
     }
   },
 
@@ -533,6 +549,20 @@ export const adminAPI = {
       // 토큰 제거
       sessionStorage.removeItem('admin-token')
       console.log('✅ 로그아웃 완료')
+    }
+  },
+
+  /**
+   * 시스템 활동 로그 조회 (관리자 전용)
+   * @param {number} limit - 최대 개수
+   */
+  async getSystemActivity(limit = 10) {
+    try {
+      const response = await apiClient.get(`/admin/system-activity?limit=${limit}`)
+      return response.data
+    } catch (error) {
+      console.warn('시스템 활동 API 호출 실패:', error)
+      return { activities: [] } // 빈 배열 반환
     }
   }
 }

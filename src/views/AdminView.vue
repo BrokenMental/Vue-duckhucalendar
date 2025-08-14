@@ -277,9 +277,14 @@
                   <td>{{ notice.id }}</td>
                   <td class="notice-title">{{ notice.title }}</td>
                   <td>
-                    <span class="priority-badge" :style="{ backgroundColor: getNoticePriorityColor(notice.priority) }">
-                      {{ getNoticePriorityText(notice.priority) }}
-                    </span>
+                    <div class="priority-display">
+                      <span class="priority-icon" :style="{ backgroundColor: getNoticePriorityColor(notice.priority) }">
+                        {{ notice.priority === 0 ? '🔴' : notice.priority === 1 ? '🟡' : '🟢' }}
+                      </span>
+                      <span class="priority-text">
+                        {{ getNoticePriorityText(notice.priority) }}
+                      </span>
+                    </div>
                   </td>
                   <td>
                     <span class="status-badge" :class="notice.isActive ? 'active' : 'inactive'">
@@ -1028,7 +1033,7 @@ export default {
         this.events = eventsData.schedules || eventsData || []
       } catch (error) {
         console.warn('이벤트 데이터 로드 실패:', error.message)
-        this.events = []
+        this.events = [] // 더미 데이터 제거, 빈 배열로 처리
       }
 
       // 이벤트 요청 데이터 로드
@@ -1037,27 +1042,18 @@ export default {
         this.eventRequests = requestsData.requests || requestsData || []
       } catch (error) {
         console.warn('이벤트 요청 데이터 로드 실패:', error.message)
-        this.eventRequests = [
-          {
-            id: 1,
-            title: '샘플 요청',
-            description: '샘플 이벤트 요청 설명입니다.',
-            status: 'pending',
-            requestType: 'ADD',
-            requesterName: '테스트 사용자',
-            email: 'test@example.com',
-            createdAt: new Date().toISOString()
-          }
-        ]
+        // 기존 더미 데이터 생성 부분 제거
+        this.eventRequests = [] // 빈 배열로 처리
       }
 
       // 구독자 데이터 로드
       try {
-        const subscribersData = await emailSubscriptionAPI.getSubscribers()
+        const subscribersData = await emailSubscriptionAPI.getActiveSubscribers()
         this.subscribers = subscribersData.subscribers || subscribersData || []
+        console.log('✅ 구독자 데이터 로드 성공:', this.subscribers.length, '명')
       } catch (error) {
-        console.warn('구독자 데이터 로드 실패:', error.message)
-        this.subscribers = []
+        console.error('❌ 구독자 데이터 로드 실패:', error.message)
+        this.subscribers = [] // 빈 배열로 처리
       }
 
       // 공지사항 데이터 로드
@@ -1066,114 +1062,46 @@ export default {
         this.notices = noticesData.notices || noticesData || []
       } catch (error) {
         console.warn('공지사항 데이터 로드 실패:', error.message)
-        this.notices = []
+        this.notices = [] // 빈 배열로 처리
       }
 
-      // 통계 계산
-      this.calculateStats()
+      // 최근 활동 데이터 로드
+      try {
+        const activityData = await scheduleAPI.getRecentActivity()
+        this.recentActivity = activityData.activities || activityData || []
+      } catch (error) {
+        console.warn('최근 활동 데이터 로드 실패:', error.message)
+        this.recentActivity = [] // 빈 배열로 처리
+      }
 
-      // 최근 활동 로드
-      this.loadRecentActivity()
+      // 시스템 활동 데이터 로드
+      try {
+        const systemData = await adminAPI.getSystemActivity()
+        this.systemActivity = systemData.activities || systemData || []
+      } catch (error) {
+        console.warn('시스템 활동 데이터 로드 실패:', error.message)
+        this.systemActivity = [] // 빈 배열로 처리
+      }
 
-      // 시스템 활동 로드
-      this.loadSystemActivity()
-
-      console.log('✅ 대시보드 데이터 로드 완료 (일부 API 실패 가능)')
-    },
-
-    // 개발용 더미 데이터 로드
-    loadDummyData() {
-      this.events = [
-        {
-          id: 1,
-          title: '샘플 이벤트 1',
-          startDate: new Date().toISOString().split('T')[0],
-          isFeatured: true,
-          category: 'HOLIDAY',
-          description: '샘플 이벤트 설명입니다.'
-        },
-        {
-          id: 2,
-          title: '샘플 이벤트 2',
-          startDate: new Date().toISOString().split('T')[0],
-          isFeatured: false,
-          category: 'FESTIVAL',
-          description: '두 번째 샘플 이벤트입니다.'
-        }
-      ]
-
-      this.eventRequests = [
-        {
-          id: 1,
-          title: '샘플 요청',
-          description: '샘플 이벤트 요청 설명입니다.',
-          status: 'pending',
-          requestType: 'ADD',        // 누락된 필드 추가
-          requesterName: '테스트 사용자',
-          email: 'test@example.com',
-          proposedDate: new Date().toISOString().split('T')[0],
-          category: 'HOLIDAY',
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: 2,
-          title: '두 번째 요청',
-          description: '이벤트 수정 요청입니다.',
-          status: 'APPROVED',
-          requestType: 'EDIT',       // 누락된 필드 추가
-          requesterName: '사용자2',
-          email: 'user2@example.com',
-          proposedDate: new Date().toISOString().split('T')[0],
-          category: 'FESTIVAL',
-          createdAt: new Date(Date.now() - 86400000).toISOString() // 1일 전
-        }
-      ]
-
-      this.subscribers = [
-        {
-          id: 1,
-          email: 'subscriber@example.com',
-          isActive: true,
-          subscribedAt: new Date().toISOString()
-        },
-        {
-          id: 2,
-          email: 'subscriber2@example.com',
-          isActive: false,
-          subscribedAt: new Date(Date.now() - 86400000).toISOString()
-        }
-      ]
-
-      this.notices = [
-        {
-          id: 1,
-          title: '샘플 공지사항',
-          content: '이것은 샘플 공지사항입니다.',
-          priority: 1,
-          isActive: true,
-          startDate: new Date().toISOString().split('T')[0],
-          endDate: null,
-          createdAt: new Date().toISOString()
-        }
-      ]
-
-      this.calculateStats()
-      this.loadRecentActivity()
-      this.loadSystemActivity()
+      console.log('✅ 대시보드 데이터 로드 완료 (일부 실패한 항목은 빈 상태로 표시)')
     },
 
     calculateStats() {
       const today = new Date().toISOString().split('T')[0]
 
+      // 안전한 배열 체크 추가
+      const safeEvents = this.events || []
+
       this.stats = {
-        totalSchedules: this.events.length,
-        featuredSchedules: this.events.filter(event => event.isFeatured).length,
-        todaySchedules: this.events.filter(event => {
-          const eventDate = event.startDate ? event.startDate.split('T')[0] : null
+        totalSchedules: safeEvents.length,
+        featuredSchedules: safeEvents.filter(event => event && event.isFeatured).length,
+        todaySchedules: safeEvents.filter(event => {
+          if (!event || !event.startDate) return false
+          const eventDate = event.startDate.split('T')[0]
           return eventDate === today
         }).length,
-        totalVisitors: this.getTotalVisitors(), // 새로 추가
-        todayVisitors: this.getTodayVisitors()   // 새로 추가
+        totalVisitors: this.getTotalVisitors(),
+        todayVisitors: this.getTodayVisitors()
       }
     },
 
@@ -1648,6 +1576,13 @@ export default {
   padding: 5px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   gap: 5px;
+  overflow-x: auto; /* 모바일에서 스크롤 가능 */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.tab-navigation::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
 }
 
 .tab-btn {
@@ -1661,6 +1596,8 @@ export default {
   font-size: 15px;
   border-radius: 8px;
   transition: all 0.3s ease;
+  white-space: nowrap; /* 텍스트 줄바꿈 방지 */
+  min-width: 120px; /* 최소 너비 설정 */
 }
 
 .tab-btn:hover {
@@ -1693,79 +1630,64 @@ export default {
 /* ===== 통계 카드 ===== */
 .stats-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(6, 1fr); /* 6개 카드를 한줄에 고정 배치 */
+  gap: 16px;
   margin-bottom: 30px;
 }
 
 .stat-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 24px;
+  background: white; /* 흰색 배경으로 변경 */
+  border: 2px solid #e2e8f0; /* 테두리 추가 */
+  color: #374151; /* 텍스트 색상을 어두운 회색으로 변경 */
+  padding: 20px;
   border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06); /* 부드러운 그림자 */
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
+  min-width: 0; /* 카드가 너무 작아져도 텍스트가 줄바꿈되도록 */
 }
 
 .stat-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 40px rgba(102, 126, 234, 0.4);
-}
-
-.stat-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(45deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%);
-  pointer-events: none;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  border-color: #667eea; /* 호버 시 테두리 색상 변경 */
 }
 
 .stat-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .stat-header h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  opacity: 0.9;
+  color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .stat-icon {
   font-size: 24px;
-  opacity: 0.8;
-}
-
-.stat-card h3 {
-  margin: 0 0 15px 0;
-  color: #64748b;
-  font-size: 14px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  opacity: 0.7;
+  color: #667eea; /* 아이콘을 브랜드 컬러로 */
 }
 
 .stat-number {
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 700;
-  margin-bottom: 8px;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  margin-bottom: 6px;
+  color: #1e293b;
 }
 
 .stat-description {
-  font-size: 12px;
-  opacity: 0.8;
+  font-size: 11px;
+  color: #64748b;
   font-weight: 500;
+  line-height: 1.3;
 }
 
 /* ===== 대시보드 컨텐츠 영역 ===== */
@@ -2535,31 +2457,53 @@ export default {
   font-size: 12px;
 }
 
-/* ===== 반응형 디자인 ===== */
+/* ===== 우선순위 표시 ===== */
+.priority-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.priority-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.priority-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+@media (max-width: 1400px) {
+  .stats-row {
+    grid-template-columns: repeat(3, 1fr); /* 큰 화면에서는 3개씩 2줄 */
+    gap: 16px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .stats-row {
+    grid-template-columns: repeat(2, 1fr); /* 중간 화면에서는 2개씩 3줄 */
+    gap: 16px;
+  }
+
+  .dashboard-content {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+
 @media (max-width: 768px) {
   .stats-row {
-    grid-template-columns: 1fr;
-  }
-
-  .form-row {
-    grid-template-columns: 1fr;
-  }
-
-  .tab-navigation {
-    flex-wrap: wrap;
-  }
-
-  .data-table {
-    font-size: 12px;
-  }
-
-  .data-table th,
-  .data-table td {
-    padding: 10px;
-  }
-
-  .stats-row {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: repeat(2, 1fr); /* 모바일에서는 2개씩 */
     gap: 12px;
   }
 
@@ -2571,23 +2515,271 @@ export default {
     font-size: 24px;
   }
 
+  .stat-icon {
+    font-size: 18px;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .tab-navigation {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr); /* 3개씩 배치 */
+    padding: 8px;
+    gap: 8px;
+    overflow-x: visible; /* 스크롤 제거 */
+  }
+
+  .tab-btn {
+    flex: none; /* flex 속성 제거 */
+    padding: 12px 8px;
+    font-size: 13px;
+    min-width: auto; /* 최소 너비 제거 */
+    text-align: center;
+    white-space: normal; /* 텍스트 줄바꿈 허용 */
+    line-height: 1.2;
+  }
+
+  /* 스크롤 인디케이터 제거 */
+  .tab-navigation::after {
+    display: none;
+  }
+
+  /* 기존 768px 이하 스타일 제거 */
+  .tab-btn:not(.active) {
+    opacity: 1;
+    transform: none;
+  }
+
+  .tab-btn.active {
+    opacity: 1;
+    transform: none;
+    z-index: auto;
+    position: static;
+  }
+
+  .data-table {
+    font-size: 12px;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 10px;
+  }
+
   .alert-content {
     flex-direction: column;
     text-align: center;
     gap: 12px;
   }
-}
 
-/* ===== 반응형 디자인 ===== */
-@media (max-width: 1200px) {
-  .stats-row {
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 16px;
+  .admin-dashboard {
+    padding: 15px;
   }
 
+  .admin-header {
+    flex-direction: column;
+    gap: 15px;
+    text-align: center;
+    padding: 15px;
+  }
+
+  .admin-header h1 {
+    font-size: 24px;
+  }
+
+  /* 대시보드 컨텐츠 모바일 최적화 */
   .dashboard-content {
     grid-template-columns: 1fr;
     gap: 20px;
+  }
+
+  .activity-section {
+    padding: 16px;
+  }
+
+  /* 테이블 모바일 최적화 */
+  .data-table {
+    font-size: 12px;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 8px 4px;
+  }
+
+  .data-table th {
+    font-size: 11px;
+  }
+
+  /* 요청 카드 모바일 최적화 */
+  .requests-grid {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .request-card {
+    padding: 15px;
+  }
+
+  .request-title {
+    font-size: 16px;
+  }
+
+  .request-meta {
+    font-size: 12px;
+  }
+
+  /* 설정 그리드 모바일 최적화 */
+  .settings-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .setting-card {
+    padding: 16px;
+  }
+
+  /* 버튼 모바일 최적화 */
+  .btn {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+
+  .btn-small {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  /* 액션 버튼 모바일 최적화 */
+  .actions {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .btn-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+
+  /* 알림 모바일 최적화 */
+  .pending-requests-alert {
+    padding: 15px;
+    margin-top: 15px;
+  }
+
+  .alert-content {
+    flex-direction: column;
+    text-align: center;
+    gap: 10px;
+  }
+
+  /* 모달 모바일 최적화 */
+  .modal-overlay {
+    padding: 10px;
+  }
+
+  .modal-content {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    border-radius: 12px;
+  }
+
+  /* 우선순위 표시 모바일 최적화 */
+  .priority-display {
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
+  }
+
+  .priority-icon {
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
+  }
+
+  .priority-text {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 480px) {
+  .tab-navigation {
+    grid-template-columns: repeat(2, 1fr); /* 2개씩 배치 */
+    margin-left: -10px;
+    margin-right: -10px;
+    border-radius: 8px;
+    padding: 8px;
+  }
+
+  .tab-btn {
+    padding: 10px 6px;
+    font-size: 12px;
+    min-width: auto;
+  }
+
+  .admin-dashboard {
+    padding: 10px;
+  }
+
+  .stat-card {
+    padding: 12px;
+  }
+
+  .stat-header h3 {
+    font-size: 12px;
+  }
+
+  .stat-number {
+    font-size: 20px;
+  }
+
+  .activity-section {
+    padding: 12px;
+  }
+
+  .activity-section h3 {
+    font-size: 16px;
+  }
+
+  .request-card {
+    padding: 12px;
+  }
+
+  .setting-card {
+    padding: 12px;
+  }
+
+  /* 테이블을 카드 형태로 변경 */
+  .data-table {
+    display: none;
+  }
+
+  .mobile-card-list {
+    display: block;
+  }
+
+  .mobile-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+
+  .mobile-card-header {
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #1e293b;
+  }
+
+  .mobile-card-content {
+    font-size: 12px;
+    color: #64748b;
+    line-height: 1.4;
   }
 }
 </style>
