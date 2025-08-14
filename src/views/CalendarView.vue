@@ -91,7 +91,7 @@
 
           <!-- 3. 최신 추가된 이벤트 (개선된 버전) -->
           <div class="sidebar-card">
-            <h3>✨ 최신 이벤트</h3>
+            <h3>✨ 최신 추가 이벤트</h3>
             <div class="recent-events">
               <!-- 로딩 상태 -->
               <div v-if="loadingSidebar" class="loading-state">
