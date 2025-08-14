@@ -113,8 +113,8 @@
         </div>
 
         <!-- 이벤트 관리 탭 -->
-        <div v-if="activeTab === 'events'" class="events-panel">
-          <div class="panel-header">
+        <div v-if="activeTab === 'events'" class="content-panel">
+          <div class="content-header">
             <h2>이벤트 목록</h2>
             <button @click="openAddEventModal" class="btn btn-primary">
               새 이벤트 추가
@@ -122,7 +122,7 @@
           </div>
 
           <div class="events-table">
-            <table>
+            <table class="data-table">
               <thead>
                 <tr>
                   <th>제목</th>
@@ -176,7 +176,7 @@
         </div>
 
         <!-- 공지사항 관리 탭 -->
-        <div v-if="activeTab === 'notices'" class="tab-content">
+        <div v-if="activeTab === 'notices'" class="content-panel">
           <div class="content-header">
             <h2>공지사항 관리</h2>
             <button class="btn btn-primary" @click="openNoticeModal()">
@@ -315,8 +315,8 @@
         </div>
 
         <!-- 이벤트 요청 탭 -->
-        <div v-if="activeTab === 'requests'" class="requests-panel">
-          <div class="panel-header">
+        <div v-if="activeTab === 'requests'" class="content-panel">
+          <div class="content-header">
             <h2>이벤트 요청 관리</h2>
             <div class="filter-buttons">
               <button
@@ -364,14 +364,14 @@
         </div>
 
         <!-- 구독자 관리 탭 -->
-        <div v-if="activeTab === 'subscribers'" class="subscribers-panel">
-          <div class="panel-header">
+        <div v-if="activeTab === 'subscribers'" class="content-panel">
+          <div class="content-header">
             <h2>구독자 관리</h2>
             <p class="subscriber-count">총 {{ subscribers.length }}명이 구독 중입니다.</p>
           </div>
 
           <div class="subscribers-table">
-            <table>
+            <table class="data-table">
               <thead>
                 <tr>
                   <th>이메일</th>
@@ -556,6 +556,15 @@ import {
   healthAPI
 } from '@/services/api.js'
 import EventManagementModal from '@/components/EventManagementModal.vue'
+import {
+  formatDate,
+  formatDateTime,
+  getPriorityText,
+  getPriorityColor,
+  getNoticePriorityText,
+  getNoticePriorityColor,
+  getCategoryColor
+} from '@/utils/common.js'
 
 export default {
   name: 'AdminView',
@@ -599,33 +608,18 @@ export default {
       events: [],
       eventRequests: [],
       subscribers: [],
-      recentActivity: [],
+      notices: [],
 
       // 필터
       requestFilter: 'all',
+
+      // 모달
       showEventModal: false,
       selectedEvent: null,
-      settings: {
-        // 일반 설정
-        siteTitle: '더쿠 캘린더',
-        siteDescription: '다양한 굿즈 이벤트를 확인하는 곳!',
-        maintenanceMode: false,
+      showNoticeModal: false,
 
-        // 뉴스레터 설정
-        newsletterEnabled: true,
-        newsletterDay: 0, // 일요일
-        newsletterTime: '09:00', // 오전 9시
-
-        // 캘린더 설정
-        weekStartDay: 0, // 일요일
-        defaultView: 'month',
-        eventsPerPage: 20,
-        showWeekNumbers: false
-      },
-      notices: [],  // 공지사항 목록
-      selectedNotice: null,  // 선택된 공지사항
-      showNoticeModal: false,  // 공지사항 모달 표시 여부
-      noticeForm: {  // 공지사항 폼
+      // 공지사항 폼
+      noticeForm: {
         id: null,
         title: '',
         content: '',
@@ -634,6 +628,20 @@ export default {
         startDate: null,
         endDate: null
       },
+
+      // 설정 (나중에 DB에서 관리)
+      settings: {
+        siteTitle: '더쿠 캘린더',
+        siteDescription: '다양한 굿즈 이벤트를 확인하는 곳!',
+        maintenanceMode: false,
+        newsletterEnabled: true,
+        newsletterDay: 0,
+        newsletterTime: '09:00',
+        weekStartDay: 0,
+        defaultView: 'month',
+        eventsPerPage: 20,
+        showWeekNumbers: false
+      }
     }
   },
 
@@ -649,7 +657,6 @@ export default {
   },
 
   async mounted() {
-    // 인증 상태 확인
     const token = sessionStorage.getItem('admin-token')
     if (token) {
       this.isAuthenticated = true
@@ -658,7 +665,16 @@ export default {
   },
 
   methods: {
-    // 임시 비밀번호 요청
+    // 유틸리티 함수들을 import해서 사용
+    formatDate,
+    formatDateTime,
+    getPriorityText,
+    getPriorityColor,
+    getNoticePriorityText,
+    getNoticePriorityColor,
+    getCategoryColor,
+
+    // 인증 관련
     async requestTempPassword() {
       if (!this.loginForm.email) {
         alert('이메일을 입력해주세요.')
@@ -669,7 +685,7 @@ export default {
       try {
         await adminAPI.requestTempPassword(this.loginForm.email)
         this.tempPasswordSent = true
-        alert('임시 비밀번호가 발송되었습니다.')
+        alert('임시 비밀번호가 이메일로 발송되었습니다.')
       } catch (error) {
         alert(error.message || '임시 비밀번호 발송에 실패했습니다.')
       } finally {
@@ -677,7 +693,6 @@ export default {
       }
     },
 
-    // 로그인
     async login() {
       if (!this.loginForm.tempPassword) {
         alert('임시 비밀번호를 입력해주세요.')
@@ -697,7 +712,6 @@ export default {
       }
     },
 
-    // 로그아웃
     async logout() {
       try {
         await adminAPI.logout()
@@ -712,45 +726,29 @@ export default {
       }
     },
 
-    // 대시보드 데이터 로딩
+    // 데이터 로딩
     async loadDashboardData() {
       this.isLoading = true
       try {
-        // Promise.allSettled를 사용해서 하나가 실패해도 다른 것들은 계속 실행
         const results = await Promise.allSettled([
-          scheduleAPI.getScheduleStats().catch(err => {
-            console.warn('통계 API 실패:', err)
-            return { totalSchedules: 0, featuredSchedules: 0, todaySchedules: 0 }
-          }),
-          scheduleAPI.getAllSchedules().catch(err => {
-            console.warn('이벤트 API 실패:', err)
-            return { schedules: [] }
-          }),
-          eventRequestAPI.getEventRequests().catch(err => {
-            console.warn('이벤트 요청 API 실패:', err)
-            return []
-          }),
-          emailSubscriptionAPI.getSubscribers().catch(err => {
-            console.warn('구독자 API 실패:', err)
-            return { subscribers: [] }
-          })
+          scheduleAPI.getScheduleStats().catch(() => ({
+            totalSchedules: 0,
+            featuredSchedules: 0,
+            todaySchedules: 0
+          })),
+          scheduleAPI.getAllSchedules().catch(() => ({ schedules: [] })),
+          eventRequestAPI.getEventRequests().catch(() => []),
+          emailSubscriptionAPI.getSubscribers().catch(() => ({ subscribers: [] }))
         ])
 
-        // 각 결과 처리
-        this.stats = results[0].value || { totalSchedules: 0, featuredSchedules: 0, todaySchedules: 0 }
+        this.stats = results[0].value
         this.events = results[1].value?.schedules || results[1].value || []
         this.eventRequests = results[2].value || []
         this.subscribers = results[3].value?.subscribers || results[3].value || []
 
-        // 공지사항은 별도로 로드
         await this.loadNotices()
 
         console.log('✅ 대시보드 데이터 로딩 완료')
-        console.log('- 이벤트:', this.events.length)
-        console.log('- 이벤트 요청:', this.eventRequests.length)
-        console.log('- 구독자:', this.subscribers.length)
-        console.log('- 공지사항:', this.notices.length)
-
       } catch (error) {
         console.error('❌ 대시보드 데이터 로딩 실패:', error)
       } finally {
@@ -774,15 +772,9 @@ export default {
       this.selectedEvent = null
     },
 
-    async handleEventSaved(result) {
-      console.log('이벤트 저장됨:', result)
+    async handleEventSaved() {
       await this.loadDashboardData()
-
-      if (result.type === 'create') {
-        console.log('새 이벤트가 추가되었습니다.')
-      } else {
-        console.log('이벤트가 수정되었습니다.')
-      }
+      this.closeEventModal()
     },
 
     async deleteEvent(event) {
@@ -792,9 +784,8 @@ export default {
         await scheduleAPI.deleteSchedule(event.id)
         await this.loadDashboardData()
         alert('이벤트가 삭제되었습니다.')
-      // eslint-disable-next-line no-unused-vars
       } catch (error) {
-        alert('이벤트 삭제에 실패했습니다.')
+        alert('이벤트 삭제에 실패했습니다. ', error)
       }
     },
 
@@ -805,262 +796,26 @@ export default {
           isFeatured: !event.isFeatured
         })
         await this.loadDashboardData()
-      // eslint-disable-next-line no-unused-vars
       } catch (error) {
-        alert('추천 상태 변경에 실패했습니다.')
+        alert('추천 상태 변경에 실패했습니다. ', error)
       }
     },
 
-    // 이벤트 요청 관리
-    async approveRequest(request) {
-      try {
-        await eventRequestAPI.updateRequestStatus(request.id, 'approved')
-        await this.loadDashboardData()
-        alert('요청이 승인되었습니다.')
-      // eslint-disable-next-line no-unused-vars
-      } catch (error) {
-        alert('요청 승인에 실패했습니다.')
-      }
-    },
-
-    async rejectRequest(request) {
-      try {
-        await eventRequestAPI.updateRequestStatus(request.id, 'rejected')
-        await this.loadDashboardData()
-        alert('요청이 거절되었습니다.')
-      // eslint-disable-next-line no-unused-vars
-      } catch (error) {
-        alert('요청 거절에 실패했습니다.')
-      }
-    },
-
-    getStatusText(status) {
-      const statusMap = {
-        pending: '대기중',
-        approved: '승인됨',
-        rejected: '거절됨'
-      }
-      return statusMap[status] || status
-    },
-
-    // 구독자 관리
-    async toggleSubscriberStatus(subscriber) {
-      try {
-        await emailSubscriptionAPI.updateSubscriber(subscriber.id, {
-          isActive: !subscriber.isActive
-        })
-        await this.loadDashboardData()
-      // eslint-disable-next-line no-unused-vars
-      } catch (error) {
-        alert('구독자 상태 변경에 실패했습니다.')
-      }
-    },
-
-    // 설정 관련 메서드들
-    async saveGeneralSettings() {
-      try {
-        console.log('일반 설정 저장:', this.settings)
-        alert('일반 설정이 저장되었습니다.')
-      // eslint-disable-next-line no-unused-vars
-      } catch (error) {
-        alert('설정 저장에 실패했습니다.')
-      }
-    },
-
-    async saveNotificationSettings() {
-      try {
-        console.log('뉴스레터 설정 저장:', this.settings)
-        alert('뉴스레터 설정이 저장되었습니다.')
-      // eslint-disable-next-line no-unused-vars
-      } catch (error) {
-        alert('설정 저장에 실패했습니다.')
-      }
-    },
-
-    async saveCalendarSettings() {
-      try {
-        console.log('캘린더 설정 저장:', this.settings)
-        alert('캘린더 설정이 저장되었습니다.')
-      // eslint-disable-next-line no-unused-vars
-      } catch (error) {
-        alert('설정 저장에 실패했습니다.')
-      }
-    },
-
-    // 데이터 관리
-    async backupData() {
-      try {
-        // 백업 생성 로직
-        alert('데이터 백업이 생성되었습니다.')
-      // eslint-disable-next-line no-unused-vars
-      } catch (error) {
-        alert('백업 생성에 실패했습니다.')
-      }
-    },
-
-    async confirmDeleteAllEvents() {
-      if (!confirm('정말로 모든 이벤트를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return
-      if (!confirm('다시 한 번 확인합니다. 모든 이벤트 데이터가 영구적으로 삭제됩니다.')) return
-
-      try {
-        // 모든 이벤트 삭제 로직
-        alert('모든 이벤트가 삭제되었습니다.')
-        await this.loadDashboardData()
-      // eslint-disable-next-line no-unused-vars
-      } catch (error) {
-        alert('이벤트 삭제에 실패했습니다.')
-      }
-    },
-
-    async confirmDeleteAllSubscribers() {
-      if (!confirm('정말로 모든 구독자를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return
-      if (!confirm('다시 한 번 확인합니다. 모든 구독자 데이터가 영구적으로 삭제됩니다.')) return
-
-      try {
-        // 모든 구독자 삭제 로직
-        alert('모든 구독자가 삭제되었습니다.')
-        await this.loadDashboardData()
-      // eslint-disable-next-line no-unused-vars
-      } catch (error) {
-        alert('구독자 삭제에 실패했습니다.')
-      }
-    },
-
-    /**
-     * 날짜 포맷팅 함수
-     * @param {string|Date} date - 포맷팅할 날짜
-     */
-    formatDate(date) {
-      if (!date) return '-'
-
-      const dateObj = new Date(date)
-      if (isNaN(dateObj.getTime())) return '-'
-
-      const year = dateObj.getFullYear()
-      const month = String(dateObj.getMonth() + 1).padStart(2, '0')
-      const day = String(dateObj.getDate()).padStart(2, '0')
-
-      return `${year}-${month}-${day}`
-    },
-
-    /**
-     * 날짜와 시간 포맷팅 함수
-     * @param {string|Date} datetime - 포맷팅할 날짜시간
-     */
-    formatDateTime(datetime) {
-      if (!datetime) return '-'
-
-      const dateObj = new Date(datetime)
-      if (isNaN(dateObj.getTime())) return '-'
-
-      const year = dateObj.getFullYear()
-      const month = String(dateObj.getMonth() + 1).padStart(2, '0')
-      const day = String(dateObj.getDate()).padStart(2, '0')
-      const hours = String(dateObj.getHours()).padStart(2, '0')
-      const minutes = String(dateObj.getMinutes()).padStart(2, '0')
-
-      return `${year}-${month}-${day} ${hours}:${minutes}`
-    },
-
-    /**
-     * 시스템 상태 확인
-     */
-    async checkSystemHealth() {
-      try {
-        const health = await healthAPI.checkHealth()
-
-        let message = '🟢 시스템이 정상적으로 작동중입니다.\n\n'
-        message += `서버 상태: ${health.status || '정상'}\n`
-        message += `데이터베이스: ${health.database || '연결됨'}\n`
-        message += `응답시간: ${health.responseTime || 'N/A'}ms`
-
-        alert(message)
-      } catch (error) {
-        alert(`🔴 시스템 상태 확인 실패\n\n${error.message}`)
-      }
-    },
-
-    /**
-     * 구독자 상태 업데이트 (수정된 메서드명)
-     */
-    async updateSubscriberStatus(subscriber) {
-      try {
-        await emailSubscriptionAPI.updateSubscriberStatus(subscriber.id, !subscriber.isActive)
-        await this.loadDashboardData()
-      // eslint-disable-next-line no-unused-vars
-      } catch (error) {
-        alert('구독자 상태 변경에 실패했습니다.')
-      }
-    },
-
-    /**
-     * 카테고리 배지 색상 반환
-     */
-    getCategoryColor(category) {
-      const colors = {
-        '공연': '#FF6B6B',
-        '전시': '#4ECDC4',
-        '페스티벌': '#45B7D1',
-        '워크샵': '#96CEB4',
-        '기타': '#FECA57'
-      }
-      return colors[category] || '#95A5A6'
-    },
-
-    /**
-     * 우선순위 텍스트 반환
-     */
-    getPriorityText(priority) {
-      const priorities = {
-        1: '높음',
-        2: '보통',
-        3: '낮음'
-      }
-      return priorities[priority] || '보통'
-    },
-
-    /**
-     * 우선순위 색상 반환
-     */
-    getPriorityColor(priority) {
-      const colors = {
-        1: '#E74C3C', // 빨간색 (높음)
-        2: '#F39C12', // 주황색 (보통)
-        3: '#27AE60'  // 녹색 (낮음)
-      }
-      return colors[priority] || '#F39C12'
-    },
-    /**
-     * 공지사항 목록 로드
-     */
+    // 공지사항 관리
     async loadNotices() {
       try {
         const response = await noticeAPI.getAllNotices()
         this.notices = response.notices || []
-        console.log('✅ 공지사항 로드 완료:', this.notices.length)
       } catch (error) {
-        console.error('❌ 공지사항 로드 실패:', error)
+        console.error('공지사항 로드 실패:', error)
         this.notices = []
       }
     },
 
-    /**
-     * 공지사항 생성/수정 모달 열기
-     */
     openNoticeModal(notice = null) {
       if (notice) {
-        // 수정 모드
-        this.noticeForm = {
-          id: notice.id,
-          title: notice.title,
-          content: notice.content,
-          priority: notice.priority || 0,
-          isActive: notice.isActive !== false,
-          startDate: notice.startDate,
-          endDate: notice.endDate
-        }
+        this.noticeForm = { ...notice }
       } else {
-        // 생성 모드
         this.noticeForm = {
           id: null,
           title: '',
@@ -1074,12 +829,8 @@ export default {
       this.showNoticeModal = true
     },
 
-    /**
-     * 공지사항 저장
-     */
     async saveNotice() {
       try {
-        // 동적 import 제거
         if (this.noticeForm.id) {
           await noticeAPI.updateNotice(this.noticeForm.id, this.noticeForm)
           alert('공지사항이 수정되었습니다.')
@@ -1087,69 +838,102 @@ export default {
           await noticeAPI.createNotice(this.noticeForm)
           alert('공지사항이 생성되었습니다.')
         }
-
         this.showNoticeModal = false
         await this.loadNotices()
       } catch (error) {
-        console.error('공지사항 저장 실패:', error)
-        alert('공지사항 저장에 실패했습니다.')
+        alert('공지사항 저장에 실패했습니다. ', error)
       }
     },
 
-    /**
-     * 공지사항 삭제
-     */
     async deleteNotice(id) {
       if (!confirm('정말 이 공지사항을 삭제하시겠습니까?')) return
 
       try {
-        // 동적 import 제거
         await noticeAPI.deleteNotice(id)
         alert('공지사항이 삭제되었습니다.')
         await this.loadNotices()
       } catch (error) {
-        console.error('공지사항 삭제 실패:', error)
-        alert('공지사항 삭제에 실패했습니다.')
+        alert('공지사항 삭제에 실패했습니다. ', error)
       }
     },
 
-    /**
-     * 공지사항 상태 토글
-     */
     async toggleNoticeStatus(id) {
       try {
-        // 동적 import 제거
         await noticeAPI.toggleNoticeStatus(id)
         await this.loadNotices()
       } catch (error) {
-        console.error('상태 변경 실패:', error)
-        alert('상태 변경에 실패했습니다.')
+        alert('상태 변경에 실패했습니다. ', error)
       }
     },
 
-    /**
-     * 공지사항 우선순위 텍스트와 색상 반환
-     */
-    getNoticePriorityText(priority) {
-      const priorities = {
-        0: '일반',
-        1: '중요',
-        2: '긴급'
+    // 이벤트 요청 관리
+    async approveRequest(request) {
+      try {
+        await eventRequestAPI.updateRequestStatus(request.id, 'APPROVED')
+        await this.loadDashboardData()
+        alert('요청이 승인되었습니다.')
+      } catch (error) {
+        alert('요청 승인에 실패했습니다. ', error)
       }
-      return priorities[priority] || '일반'
     },
 
-    /**
-     * 공지사항 우선순위 색상 반환
-     */
-    getNoticePriorityColor(priority) {
-      const colors = {
-        0: '#6c757d',  // 회색 (일반)
-        1: '#ffc107',  // 노란색 (중요)
-        2: '#dc3545'   // 빨간색 (긴급)
+    async rejectRequest(request) {
+      try {
+        await eventRequestAPI.updateRequestStatus(request.id, 'REJECTED')
+        await this.loadDashboardData()
+        alert('요청이 거절되었습니다.')
+      } catch (error) {
+        alert('요청 거절에 실패했습니다. ', error)
       }
-      return colors[priority] || '#6c757d'
     },
+
+    getStatusText(status) {
+      const statusMap = {
+        pending: '대기중',
+        PENDING: '대기중',
+        approved: '승인됨',
+        APPROVED: '승인됨',
+        rejected: '거절됨',
+        REJECTED: '거절됨'
+      }
+      return statusMap[status] || status
+    },
+
+    // 구독자 관리
+    async toggleSubscriberStatus(subscriber) {
+      try {
+        await emailSubscriptionAPI.updateSubscriberStatus(
+          subscriber.id,
+          !subscriber.isActive
+        )
+        await this.loadDashboardData()
+      } catch (error) {
+        alert('구독자 상태 변경에 실패했습니다. ', error)
+      }
+    },
+
+    // 설정 관련
+    async saveGeneralSettings() {
+      // TODO: API 구현 후 연동
+      console.log('일반 설정 저장:', this.settings)
+      alert('일반 설정이 저장되었습니다.')
+    },
+
+    async saveNotificationSettings() {
+      // TODO: API 구현 후 연동
+      console.log('뉴스레터 설정 저장:', this.settings)
+      alert('뉴스레터 설정이 저장되었습니다.')
+    },
+
+    // 시스템 체크
+    async checkSystemHealth() {
+      try {
+        const health = await healthAPI.checkHealth()
+        alert(`🟢 시스템 정상 작동중\n\n서버: ${health.status || '정상'}\nDB: ${health.database || '연결됨'}`)
+      } catch (error) {
+        alert(`🔴 시스템 상태 확인 실패\n\n${error.message}`)
+      }
+    }
   }
 }
 </script>
@@ -1157,10 +941,10 @@ export default {
 <style scoped>
 .admin-container {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #f5f7fa;
 }
 
-/* 로그인 섹션 */
+/* ===== 로그인 섹션 ===== */
 .login-section {
   display: flex;
   justify-content: center;
@@ -1173,7 +957,7 @@ export default {
   background: white;
   padding: 40px;
   border-radius: 12px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
   width: 100%;
   max-width: 400px;
 }
@@ -1181,40 +965,15 @@ export default {
 .login-card h2 {
   text-align: center;
   margin-bottom: 30px;
-  color: #333;
+  color: #2c3e50;
+  font-size: 28px;
 }
 
-.form-group {
-  margin-bottom: 20px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 600;
-  color: #555;
-}
-
-.form-group input {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 14px;
-}
-
-.success-message {
-  color: #28a745;
-  text-align: center;
-  margin-bottom: 20px;
-  padding: 10px;
-  background-color: #d4edda;
-  border-radius: 6px;
-}
-
-/* 관리자 대시보드 */
+/* ===== 관리자 대시보드 ===== */
 .admin-dashboard {
-  padding: 20px;
+  padding: 30px;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
 .admin-header {
@@ -1222,792 +981,57 @@ export default {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 30px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid #eee;
+  padding: 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .admin-header h1 {
-  color: #333;
+  color: #2c3e50;
   margin: 0;
+  font-size: 32px;
+  font-weight: 700;
 }
 
-/* 탭 네비게이션 */
+/* ===== 탭 네비게이션 ===== */
 .tab-navigation {
   display: flex;
   background: white;
-  border-radius: 8px;
-  margin-bottom: 20px;
-  overflow: hidden;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  margin-bottom: 30px;
+  padding: 5px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  gap: 5px;
 }
 
 .tab-btn {
   flex: 1;
   padding: 15px 20px;
-  background: white;
+  background: transparent;
   border: none;
   cursor: pointer;
   font-weight: 500;
-  color: #666;
-  transition: all 0.3s;
-  border-bottom: 3px solid transparent;
+  color: #64748b;
+  font-size: 15px;
+  border-radius: 8px;
+  transition: all 0.3s ease;
 }
 
 .tab-btn:hover {
-  background-color: #f8f9fa;
+  background-color: #f1f5f9;
+  color: #475569;
 }
 
 .tab-btn.active {
-  color: #007bff;
-  border-bottom-color: #007bff;
-  background-color: #f8f9fa;
-}
-
-/* 대시보드 통계 카드를 한 줄로 */
-.stats-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
-  margin-bottom: 30px;
-}
-
-.stat-card {
-  background: white;
-  padding: 25px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  text-align: center;
-}
-
-.stat-card h3 {
-  margin: 0 0 15px 0;
-  color: #666;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.stat-number {
-  font-size: 32px;
-  font-weight: bold;
-  color: #007bff;
-}
-
-/* 대시보드 콘텐츠 */
-.dashboard-content {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 20px;
-}
-
-.recent-activity,
-.quick-actions {
-  background: white;
-  padding: 25px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.recent-activity h3,
-.quick-actions h3 {
-  margin: 0 0 20px 0;
-  color: #333;
-}
-
-.activity-list {
-  space-y: 10px;
-}
-
-.activity-item {
-  display: flex;
-  justify-content: space-between;
-  padding: 10px 0;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.activity-time {
-  color: #666;
-  font-size: 12px;
-}
-
-.action-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-/* 이벤트 테이블 */
-.events-panel,
-.requests-panel,
-.subscribers-panel {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 25px;
-  border-bottom: 1px solid #eee;
-}
-
-.panel-header h2 {
-  margin: 0;
-  color: #333;
-}
-
-.events-table,
-.subscribers-table {
-  overflow-x: auto;
-}
-
-.events-table table,
-.subscribers-table table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.events-table th,
-.events-table td,
-.subscribers-table th,
-.subscribers-table td {
-  padding: 15px;
-  text-align: left;
-  border-bottom: 1px solid #eee;
-}
-
-.events-table th,
-.subscribers-table th {
-  background-color: #f8f9fa;
-  font-weight: 600;
-  color: #555;
-}
-
-/* 날짜/시간 정보 스타일링 */
-.date-time-info {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.date-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.time-info {
-  font-size: 12px;
-  color: #666;
-  background-color: #f0f0f0;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.category-badge {
-  background-color: #e3f2fd;
-  color: #1976d2;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.star-btn {
-  background: none;
-  border: none;
-  font-size: 18px;
-  cursor: pointer;
-  padding: 4px;
-}
-
-.text-center {
-  text-align: center;
-}
-
-.actions {
-  display: flex;
-  gap: 8px;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 40px;
-  color: #666;
-}
-
-/* 이벤트 요청 */
-.filter-buttons {
-  display: flex;
-  gap: 10px;
-}
-
-.filter-btn {
-  padding: 8px 16px;
-  border: 1px solid #ddd;
-  background: white;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.3s;
-}
-
-.filter-btn:hover {
-  background-color: #f8f9fa;
-}
-
-.filter-btn.active {
-  background-color: #007bff;
-  color: white;
-  border-color: #007bff;
-}
-
-.requests-list {
-  padding: 20px;
-}
-
-.request-card {
-  background: #f8f9fa;
-  border: 1px solid #eee;
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 15px;
-}
-
-.request-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-}
-
-.request-header h4 {
-  margin: 0;
-  color: #333;
-}
-
-.status-badge {
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.status-badge.pending {
-  background-color: #fff3cd;
-  color: #856404;
-}
-
-.status-badge.approved {
-  background-color: #d4edda;
-  color: #155724;
-}
-
-.status-badge.rejected {
-  background-color: #f8d7da;
-  color: #721c24;
-}
-
-.status-badge.active {
-  background-color: #d4edda;
-  color: #155724;
-}
-
-.status-badge.inactive {
-  background-color: #f8d7da;
-  color: #721c24;
-}
-
-.request-content p {
-  margin: 5px 0;
-  color: #555;
-}
-
-.request-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 15px;
-}
-
-/* 구독자 관리 */
-.subscriber-count {
-  color: #666;
-  margin: 0;
-  font-size: 14px;
-}
-
-/* 설정 */
-.settings-panel {
-  padding: 20px;
-}
-
-.settings-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 20px;
-}
-
-.setting-card {
-  background: white;
-  border: 1px solid #eee;
-  border-radius: 8px;
-  padding: 25px;
-}
-
-.setting-card h3 {
-  margin: 0 0 20px 0;
-  color: #333;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #eee;
-}
-
-.setting-item {
-  margin-bottom: 20px;
-}
-
-.setting-item label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-  color: #555;
-}
-
-.setting-item input,
-.setting-item select,
-.setting-item textarea {
-  width: 100%;
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-}
-
-.setting-item textarea {
-  resize: vertical;
-  min-height: 80px;
-}
-
-.checkbox-label {
-  display: flex !important;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-}
-
-.checkbox-label input[type="checkbox"] {
-  width: auto;
-  margin: 0;
-}
-
-.danger-zone {
-  border: 1px solid #dc3545;
-  border-radius: 4px;
-  padding: 15px;
-  background-color: #fff5f5;
-}
-
-.danger-zone button {
-  margin-right: 10px;
-  margin-bottom: 10px;
-}
-
-.warning-text {
-  color: #dc3545;
-  font-size: 12px;
-  margin: 10px 0 0 0;
-}
-
-/* 버튼 스타일 */
-.btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  text-decoration: none;
-  display: inline-block;
-  transition: all 0.3s;
-  font-size: 14px;
-}
-
-.btn-primary {
-  background-color: #007bff;
-  color: white;
-}
-
-.btn-primary:hover {
-  background-color: #0056b3;
-}
-
-.btn-secondary {
-  background-color: #6c757d;
-  color: white;
-}
-
-.btn-secondary:hover {
-  background-color: #545b62;
-}
-
-.btn-success {
-  background-color: #28a745;
-  color: white;
-}
-
-.btn-success:hover {
-  background-color: #1e7e34;
-}
-
-.btn-danger {
-  background-color: #dc3545;
-  color: white;
-}
-
-.btn-danger:hover {
-  background-color: #c82333;
-}
-
-.btn-outline {
-  background-color: transparent;
-  color: #007bff;
-  border: 1px solid #007bff;
-}
-
-.btn-outline:hover {
-  background-color: #007bff;
-  color: white;
-}
-
-.btn-small {
-  padding: 6px 12px;
-  font-size: 12px;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* 공지사항 관련 스타일 */
-.notices-list {
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  margin-top: 20px;
-}
-
-.notice-title {
-  max-width: 300px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.priority-badge {
-  padding: 4px 8px;
-  border-radius: 4px;
-  color: white;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.status-badge {
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.status-badge.active {
-  background-color: #d4edda;
-  color: #155724;
-}
-
-.status-badge.inactive {
-  background-color: #f8d7da;
-  color: #721c24;
-}
-
-/* 모달 스타일 */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: white;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 600px;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.notice-modal {
-  padding: 0;
-}
-
-.modal-header {
-  padding: 20px;
-  border-bottom: 1px solid #e0e0e0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.modal-header h3 {
-  margin: 0;
-  color: #333;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: #666;
-  padding: 0;
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.close-btn:hover {
-  color: #333;
-}
-
-.modal-body {
-  padding: 20px;
-}
-
-.modal-footer {
-  padding: 20px;
-  border-top: 1px solid #e0e0e0;
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-.form-group {
-  margin-bottom: 20px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 600;
-  color: #333;
-}
-
-.form-group input[type="text"],
-.form-group input[type="datetime-local"],
-.form-group textarea,
-.form-group select {
-  width: 100%;
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-}
-
-.form-group textarea {
-  resize: vertical;
-  font-family: inherit;
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-}
-
-.btn-icon {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 18px;
-  padding: 4px;
-  margin: 0 2px;
-  transition: transform 0.2s;
-}
-
-.btn-icon:hover {
-  transform: scale(1.2);
-}
-
-.actions {
-  display: flex;
-  gap: 5px;
-}
-
-/* 데이터 테이블 개선 */
-.data-table {
-  width: 100%;
-  background: white;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  border-collapse: separate;
-  border-spacing: 0;
-}
-
-.data-table thead {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
-.data-table th {
-  padding: 15px 12px;
-  text-align: left;
-  font-weight: 600;
-  font-size: 14px;
-  white-space: nowrap;
-}
-
-.data-table td {
-  padding: 12px;
-  border-bottom: 1px solid #f0f0f0;
-  font-size: 14px;
-  vertical-align: middle;
-}
-
-.data-table tbody tr:hover {
-  background-color: #f8f9fa;
-  transition: background-color 0.2s;
-}
-
-.data-table tbody tr:last-child td {
-  border-bottom: none;
-}
-
-/* 공지사항 테이블 특별 스타일 */
-.notices-list {
-  background: white;
-  border-radius: 10px;
-  padding: 20px;
-  margin-top: 20px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-}
-
-.notices-list .data-table {
-  margin-top: 0;
-  box-shadow: none;
-}
-
-.notice-title {
-  font-weight: 500;
-  color: #333;
-  max-width: 400px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.notice-title:hover {
-  color: #667eea;
-  text-decoration: underline;
-}
-
-/* 우선순위 배지 개선 */
-.priority-badge {
-  padding: 5px 10px;
-  border-radius: 12px;
-  color: white;
-  font-size: 12px;
-  font-weight: 600;
-  display: inline-block;
-  text-align: center;
-  min-width: 50px;
-}
-
-/* 상태 배지 개선 */
-.status-badge {
-  padding: 5px 10px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
-  display: inline-block;
-  text-align: center;
-  min-width: 50px;
-}
-
-.status-badge.active {
-  background-color: #d4edda;
-  color: #155724;
-  border: 1px solid #c3e6cb;
-}
-
-.status-badge.inactive {
-  background-color: #f8d7da;
-  color: #721c24;
-  border: 1px solid #f5c6cb;
-}
-
-/* 액션 버튼 개선 */
-.actions {
-  display: flex;
-  gap: 8px;
-}
-
-.btn-icon {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 18px;
-  padding: 6px;
-  margin: 0;
-  transition: all 0.2s;
-  border-radius: 4px;
-}
-
-.btn-icon:hover {
-  transform: scale(1.1);
-  background-color: rgba(102, 126, 234, 0.1);
-}
-
-/* 빈 상태 개선 */
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
-  color: #999;
-}
-
-.empty-state p {
-  font-size: 16px;
-  margin-bottom: 20px;
-}
-
-/* 콘텐츠 헤더 개선 */
-.content-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 25px;
-  padding-bottom: 15px;
-  border-bottom: 2px solid #e0e0e0;
-}
-
-.content-header h2 {
-  font-size: 26px;
-  color: #333;
-  margin: 0;
-  font-weight: 600;
-}
-
-/* 탭 콘텐츠 개선 */
+/* ===== 탭 콘텐츠 공통 스타일 ===== */
 .tab-content {
-  animation: fadeIn 0.3s ease-in;
+  animation: fadeIn 0.4s ease-in;
 }
 
 @keyframes fadeIn {
@@ -2021,46 +1045,403 @@ export default {
   }
 }
 
-/* 반응형 디자인 */
-@media (max-width: 768px) {
-  .stats-row {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .dashboard-content {
-    grid-template-columns: 1fr;
-  }
-
-  .settings-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .panel-header {
-    flex-direction: column;
-    gap: 15px;
-    align-items: flex-start;
-  }
-
-  .actions {
-    flex-direction: column;
-  }
-
-  .request-actions {
-    flex-direction: column;
-  }
+/* ===== 통계 카드 ===== */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
 }
 
-@media (max-width: 480px) {
+.stat-card {
+  background: white;
+  padding: 25px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+.stat-card h3 {
+  margin: 0 0 15px 0;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-number {
+  font-size: 36px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ===== 통일된 패널 스타일 ===== */
+.content-panel {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.content-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 25px;
+  border-bottom: 2px solid #f1f5f9;
+  background: linear-gradient(135deg, #f6f8fb 0%, #ffffff 100%);
+}
+
+.content-header h2 {
+  font-size: 24px;
+  color: #2c3e50;
+  margin: 0;
+  font-weight: 600;
+}
+
+/* ===== 통일된 테이블 스타일 ===== */
+.data-table {
+  width: 100%;
+  background: white;
+}
+
+.data-table thead {
+  background: #f8fafc;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.data-table th {
+  padding: 16px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 13px;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.data-table td {
+  padding: 16px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 14px;
+  color: #334155;
+  vertical-align: middle;
+}
+
+.data-table tbody tr {
+  transition: background-color 0.2s ease;
+}
+
+.data-table tbody tr:hover {
+  background-color: #f8fafc;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ===== 배지 스타일 통일 ===== */
+.badge {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-block;
+  text-align: center;
+  min-width: 60px;
+}
+
+.badge-success {
+  background-color: #d1fae5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.badge-warning {
+  background-color: #fed7aa;
+  color: #92400e;
+  border: 1px solid #fdba74;
+}
+
+.badge-danger {
+  background-color: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.badge-info {
+  background-color: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
+.badge-default {
+  background-color: #f3f4f6;
+  color: #4b5563;
+  border: 1px solid #e5e7eb;
+}
+
+/* ===== 액션 버튼 통일 ===== */
+.actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn-icon {
+  background: white;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  font-size: 18px;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.btn-icon:hover {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: transparent;
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.btn-icon:hover * {
+  filter: brightness(0) invert(1);
+}
+
+/* ===== 버튼 스타일 통일 ===== */
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.btn-secondary {
+  background: #64748b;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #475569;
+  transform: translateY(-2px);
+}
+
+.btn-outline {
+  background: white;
+  color: #667eea;
+  border: 2px solid #667eea;
+}
+
+.btn-outline:hover {
+  background: #667eea;
+  color: white;
+  transform: translateY(-2px);
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+  transform: translateY(-2px);
+}
+
+.btn-success {
+  background: #10b981;
+  color: white;
+}
+
+.btn-success:hover {
+  background: #059669;
+  transform: translateY(-2px);
+}
+
+/* ===== 빈 상태 스타일 ===== */
+.empty-state {
+  text-align: center;
+  padding: 80px 20px;
+  color: #94a3b8;
+}
+
+.empty-state p {
+  font-size: 18px;
+  margin-bottom: 20px;
+}
+
+.empty-state .icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+  opacity: 0.3;
+}
+
+/* ===== 모달 스타일 ===== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background: white;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  padding: 25px;
+  border-bottom: 2px solid #f1f5f9;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, #f6f8fb 0%, #ffffff 100%);
+  border-radius: 16px 16px 0 0;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: #94a3b8;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.close-btn:hover {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.modal-body {
+  padding: 25px;
+}
+
+.modal-footer {
+  padding: 25px;
+  border-top: 2px solid #f1f5f9;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  background: #f8fafc;
+  border-radius: 0 0 16px 16px;
+}
+
+/* ===== 폼 스타일 통일 ===== */
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #475569;
+  font-size: 14px;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: all 0.2s;
+  background: white;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+/* ===== 반응형 디자인 ===== */
+@media (max-width: 768px) {
   .stats-row {
+    grid-template-columns: 1fr;
+  }
+
+  .form-row {
     grid-template-columns: 1fr;
   }
 
   .tab-navigation {
-    flex-direction: column;
+    flex-wrap: wrap;
   }
 
-  .filter-buttons {
-    flex-wrap: wrap;
+  .data-table {
+    font-size: 12px;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 10px;
   }
 }
 </style>

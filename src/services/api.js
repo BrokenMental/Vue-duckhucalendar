@@ -145,32 +145,14 @@ export const scheduleAPI = {
   /**
    * 모든 일정 조회 (재시도 로직 포함)
    */
-  async getAllSchedules() {
-    const maxRetries = 3;
-    let retryCount = 0;
-
-    while (retryCount < maxRetries) {
-      try {
-        console.log(`📡 일정 조회 시도 ${retryCount + 1}/${maxRetries}...`);
-        const response = await apiClient.get('/schedules');
-        console.log('✅ 일정 조회 성공!');
-        return response.data;
-
-      } catch (error) {
-        retryCount++;
-        console.warn(`❌ 일정 조회 실패 (${retryCount}/${maxRetries}):`, error.message);
-
-        // 최대 재시도 횟수에 도달한 경우
-        if (retryCount >= maxRetries) {
-          console.error('🚨 최대 재시도 횟수 초과. 에러 발생.');
-          throw new Error(error.userMessage || '일정을 불러오는데 실패했습니다.');
-        }
-
-        // 재시도 전 대기 (500ms, 1s, 1.5s)
-        const delayMs = 500 * retryCount;
-        console.log(`⏳ ${delayMs}ms 후 재시도...`);
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-      }
+  async getAllSchedules(sortBy = 'date') {
+    try {
+      const response = await apiClient.get('/schedules', {
+        params: { sortBy }
+      })
+      return response.data
+    } catch (error) {
+      throw new Error(error.userMessage || '일정을 불러오는데 실패했습니다.')
     }
   },
 
@@ -439,12 +421,14 @@ export const emailSubscriptionAPI = {
    * @param {number} subscriberId - 구독자 ID
    * @param {boolean} isActive - 활성화 상태
    */
-  async updateSubscriberStatus(subscriberId, isActive) {
+  async updateSubscriberStatus(id, isActive) {
     try {
-      const response = await apiClient.patch(`/email-subscriptions/${subscriberId}/status`, { isActive })
+      const response = await apiClient.patch(`/email-subscriptions/${id}/status`, {
+        isActive
+      })
       return response.data
     } catch (error) {
-      throw new Error(error.userMessage || '구독 상태 변경에 실패했습니다.')
+      throw new Error(error.userMessage || '구독자 상태 변경에 실패했습니다.')
     }
   },
 
