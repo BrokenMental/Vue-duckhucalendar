@@ -78,15 +78,32 @@
               }"
               @click="handleDateCellClick(day)"
             >
-              <!-- 날짜 숫자 -->
-              <div class="date-number"
-                   :class="{
-                     'sunday-text': dayIndex === 0,
-                     'saturday-text': dayIndex === 6,
-                     'holiday-text': getHolidaysForDay(day.fullDate).length > 0,
-                     'other-month-text': day.isOtherMonth
-                   }">
-                {{ day.dateNumber }}
+              <!-- 주차 표시 - 매주 첫번째 날(일요일)에만 표시 -->
+              <div v-if="dayIndex === 0" class="week-indicator"
+                  :class="{ 'has-events': getTotalWeekScheduleCount(weekIndex) > 0 }">
+                <span class="week-number">{{ getWeekNumberOfMonth(weekIndex) }}주차</span>
+                <span v-if="getTotalWeekScheduleCount(weekIndex) > 0"
+                      class="event-count">{{ getTotalWeekScheduleCount(weekIndex) }}개</span>
+              </div>
+
+              <!-- 날짜 숫자와 일정 개수를 한 줄에 -->
+              <div class="date-header">
+                <div class="date-number"
+                    :class="{
+                      'sunday-text': dayIndex === 0,
+                      'saturday-text': dayIndex === 6,
+                      'holiday-text': getHolidaysForDay(day.fullDate).length > 0,
+                      'other-month-text': day.isOtherMonth
+                    }">
+                  {{ day.dateNumber }}
+                  <!-- 오늘 날짜 표시 -->
+                  <span v-if="isDuckHuToday(new Date(day.fullDate + 'T00:00:00'))" class="today-label">Today</span>
+                </div>
+
+                <!-- 일정 개수 표시를 일자 옆으로 이동 -->
+                <div v-if="getTotalScheduleCountForDay(day.fullDate, weekIndex) > 0" class="schedule-count-inline">
+                  {{ getTotalScheduleCountForDay(day.fullDate, weekIndex) }} 개
+                </div>
               </div>
 
               <!-- 공휴일 표시 -->
@@ -103,10 +120,10 @@
               </div>
 
               <!-- 이벤트 컨테이너 - 하루짜리 일정만 표시 -->
-              <div class="date-events">
-                <!-- 하루짜리 일정만 모바일에서 표시 (여러 날 걸친 일정은 제외) -->
+              <div class="date-events" :style="getDateEventsStyle(weekIndex, dayIndex, day.fullDate)">
+                <!-- 표시 가능한 단기 일정만 표시 -->
                 <div
-                  v-for="(schedule, eventIndex) in getSingleDaySchedulesForDay(day.fullDate).slice(0, 2)"
+                  v-for="(schedule, eventIndex) in getDisplayableSingleDaySchedules(day.fullDate, weekIndex)"
                   :key="eventIndex"
                   class="mobile-event"
                   :style="{ backgroundColor: schedule.color || '#3498db' }"
@@ -117,26 +134,20 @@
                   <span class="event-text">{{ schedule.title }}</span>
                 </div>
 
-                <!-- 더 많은 일정이 있을 때 -->
+                <!-- 더 많은 일정이 있을 때 - 총 일정 개수 기준 -->
                 <div
-                  v-if="getDuckHuScheduleCountForDay(day.fullDate) > 2"
+                  v-if="getTotalScheduleCountForDay(day.fullDate, weekIndex) > 2"
                   class="more-events"
                   @click.stop="showDuckHuDaySchedules(day.fullDate)"
                 >
-                  +{{ getDuckHuScheduleCountForDay(day.fullDate) - 2 }}개
+                  +{{ getTotalScheduleCountForDay(day.fullDate, weekIndex) - 2 }}개
                 </div>
-              </div>
-
-              <!-- 일정 개수 표시 (하단에) -->
-              <div v-if="getDuckHuScheduleCountForDay(day.fullDate) > 0"
-                  class="schedule-count">
-                📅 {{ getDuckHuScheduleCountForDay(day.fullDate) }}개
               </div>
             </div>
           </div>
         </div>
 
-        <!-- 전체 캘린더에 대한 이벤트 레이어 (외부로 분리) -->
+        <!-- 전체 캘린더에 대한 이벤트 레이어 -->
         <div class="global-events-layer">
           <div
             v-for="(events, weekIndex) in allWeekEvents"
@@ -144,12 +155,7 @@
             class="week-events-container"
             :style="getWeekContainerStyle(weekIndex)"
           >
-            <!-- 주차 표시 기능 -->
-            <div class="week-indicator"
-                :class="{ 'has-events': events.length > 0 }">
-              <span class="week-number">{{ getWeekNumberOfMonth(weekIndex) }}주차</span>
-              <span v-if="events.length > 0" class="event-count">{{ events.length }}개</span>
-            </div>
+            <!-- 주차 표시 기능을 제거 - 이제 date-cell 안에 있음 -->
 
             <div
               v-for="event in events"
@@ -168,7 +174,7 @@
                   {{ event.schedule.startTime }}
                 </span>
                 <span class="event-title" :class="{ 'with-time': event.isStart && event.schedule.startTime }">
-                  {{ event.isRainbow ? getDuckHuRainbowText(event.overlappingCount) : event.schedule.title }}
+                  {{ event.isRainbow ? `${getEventCountText(event.eventCount)}` : event.schedule.title }}
                 </span>
               </div>
             </div>
@@ -302,6 +308,25 @@ export default {
         return {}
       }
       return this.cachedWeekEvents
+    },
+
+    /**
+     * 각 주차별 최대 이벤트 행 수 계산
+     */
+    maxEventRowsByWeek() {
+      const maxRows = {}
+
+      Object.keys(this.allWeekEvents).forEach(weekIndex => {
+        const events = this.allWeekEvents[weekIndex] || []
+        const maxRow = events.reduce((max, event) => {
+          return Math.max(max, event.rowIndex)
+        }, -1)
+
+        // 행 인덱스는 0부터 시작하므로 실제 행 수는 +1
+        maxRows[weekIndex] = maxRow >= 0 ? maxRow + 1 : 0
+      })
+
+      return maxRows
     }
   },
 
@@ -852,20 +877,25 @@ export default {
       // 이 주차에 걸쳐있는 여러 날 일정들만 필터링
       const weekMultiDaySchedules = this.duckHuSchedules.filter(schedule => {
         return schedule.startDate <= weekEnd &&
-               schedule.endDate >= weekStart &&
-               schedule.startDate !== schedule.endDate
+              schedule.endDate >= weekStart &&
+              schedule.startDate !== schedule.endDate
       })
 
-      // 우선순위와 시작일로 정렬
+      // 시작일 기준으로 정렬 (우선순위보다 시작일을 우선)
       weekMultiDaySchedules.sort((a, b) => {
+        const dateCompare = a.startDate.localeCompare(b.startDate)
+        if (dateCompare !== 0) return dateCompare
+
         if (a.priority !== b.priority) {
           return a.priority - b.priority
         }
-        return a.startDate.localeCompare(b.startDate)
+        return a.title.localeCompare(b.title) // 제목으로 최종 정렬
       })
 
-      // 행 배치를 위한 배열
+      // 행 배치를 위한 배열 - 완전 초기화
       const rowAssignments = []
+
+      console.log(`📅 주차 ${weekIndex} 이벤트 배치 시작:`, weekMultiDaySchedules.map(s => s.title))
 
       weekMultiDaySchedules.forEach((schedule) => {
         // 이 주차에서 보여질 이벤트의 시작일과 종료일
@@ -876,16 +906,21 @@ export default {
         const endDayIndex = week.findIndex(day => day.fullDate === eventEndDate)
 
         if (startDayIndex !== -1 && endDayIndex !== -1) {
+          console.log(`🔍 ${schedule.title}: ${startDayIndex}-${endDayIndex}`)
+
           // 겹치지 않는 행 찾기
           const assignedRow = this.findAvailableRow(rowAssignments, startDayIndex, endDayIndex)
 
           // 행 정보 저장
-          rowAssignments.push({
+          const assignment = {
             schedule: schedule,
             startDay: startDayIndex,
             endDay: endDayIndex,
             row: assignedRow
-          })
+          }
+          rowAssignments.push(assignment)
+
+          console.log(`✅ ${schedule.title} -> 행 ${assignedRow} 배치`)
 
           // 겹치는 일정 개수 계산
           const overlappingCount = this.getOverlappingCount(schedule, weekMultiDaySchedules, eventStartDate, eventEndDate)
@@ -906,11 +941,13 @@ export default {
             showTitle: isActualStart,
             isRainbow: isRainbow,
             overlappingCount: overlappingCount,
+            eventCount: overlappingCount,
             key: `${schedule.id}-week${weekIndex}-row${assignedRow}`
           })
         }
       })
 
+      console.log(`📊 주차 ${weekIndex} 최종 배치:`, events.map(e => `${e.schedule.title}(행${e.rowIndex})`))
       return events
     },
 
@@ -933,24 +970,28 @@ export default {
     findAvailableRow(rowAssignments, startDay, endDay) {
       let row = 0
 
-      while (true) {
-        // 현재 행에서 겹치는 일정이 있는지 확인
-        const hasConflict = rowAssignments.some(assignment =>
-          assignment.row === row &&
-          !(endDay < assignment.startDay || startDay > assignment.endDay)
-        )
+      while (row < 10) { // 최대 10개 행까지 허용
+        // 현재 행에서 겹치는 일정이 있는지 정확하게 확인
+        const hasConflict = rowAssignments.some(assignment => {
+          if (assignment.row !== row) return false
+
+          // 겹침 조건을 더 엄격하게: 하루라도 겹치면 안됨
+          // startDay <= assignment.endDay && endDay >= assignment.startDay 이면 겹침
+          return !(endDay < assignment.startDay || startDay > assignment.endDay)
+        })
 
         if (!hasConflict) {
+          console.log(`✅ 행 ${row} 사용 가능: ${startDay}-${endDay}`)
           return row
+        } else {
+          console.log(`❌ 행 ${row} 겹침: ${startDay}-${endDay}`)
         }
 
         row++
-
-        // 최대 4개 행까지만 허용
-        if (row >= 4) {
-          return 3
-        }
       }
+
+      console.log(`⚠️ 최대 행 수 초과, 마지막 행 사용: ${startDay}-${endDay}`)
+      return 9
     },
 
     /**
@@ -1002,42 +1043,34 @@ export default {
         }
       }
 
-      const eventHeight = this.DUCKHU_EVENT_HEIGHT
-      const eventMargin = this.DUCKHU_EVENT_MARGIN
+      const eventHeight = window.innerWidth <= 768 ? 16 : 20; // 반응형 높이
+      const eventMargin = window.innerWidth <= 768 ? 1 : 2;   // 반응형 간격
 
-      // 이벤트의 위치와 크기 계산 (주차별 레이어 내에서의 상대 위치)
+      // 이벤트의 위치와 크기 계산
       const left = event.startDayIndex * cellWidth
       const width = (event.endDayIndex - event.startDayIndex + 1) * cellWidth
-      // 날짜 숫자(20px) + 공휴일(15px) 아래 위치 + 행 간격
-      const top = 35 + (event.rowIndex * (eventHeight + eventMargin))
+
+      // top 값을 행별로 정확히 계산 - 각 행마다 (높이 + 간격)만큼 아래로
+      const baseTop = window.innerWidth <= 768 ? 35 : 40; // 기본 시작 위치
+      const top = baseTop + (event.rowIndex * (eventHeight + eventMargin))
+
+      //console.log(`🎨 ${event.schedule.title}: 행${event.rowIndex}, top=${top}px`)
 
       // 무지개 색상 배경 설정
       const backgroundColor = event.isRainbow
         ? 'linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #ffeaa7, #fab1a0, #fd79a8)'
         : event.schedule.color || '#3498db'
 
-      // 디버깅 로그
-      console.log(`🎨 이벤트 스타일: ${event.schedule.title}`, {
-        weekIndex: event.weekIndex,
-        rowIndex: event.rowIndex,
-        startDayIndex: event.startDayIndex,
-        endDayIndex: event.endDayIndex,
-        left: `${left}px`,
-        top: `${top}px`,
-        width: `${Math.max(width - 2, 20)}px`,
-        cellWidth: cellWidth
-      })
-
       return {
         position: 'absolute',
         left: `${left}px`,
-        top: `${top}px`,
-        width: `${Math.max(width - 2, 20)}px`, // 최소 너비 20px, 경계선 고려 2px 빼기
+        top: `${top}px`, // top 값 복원
+        width: `${Math.max(width - 2, 20)}px`,
         height: `${eventHeight}px`,
         background: backgroundColor,
         borderRadius: event.isStart && event.isEnd ? '4px' :
-                     event.isStart ? '4px 0 0 4px' :
-                     event.isEnd ? '0 4px 4px 0' : '0',
+                    event.isStart ? '4px 0 0 4px' :
+                    event.isEnd ? '0 4px 4px 0' : '0',
         zIndex: 10 + event.rowIndex,
         cursor: 'pointer',
         display: 'flex',
@@ -1049,22 +1082,15 @@ export default {
         boxShadow: event.isRainbow ? '0 2px 8px rgba(0, 0, 0, 0.3)' : '0 1px 3px rgba(0, 0, 0, 0.2)',
         transition: 'all 0.2s ease',
         color: 'white',
-        fontSize: window.innerWidth <= 768 ? '11px' : '12px', // 모바일에서 글자 크기 조정
+        fontSize: window.innerWidth <= 768 ? '10px' : '12px',
         fontWeight: '500'
       }
     },
 
     /**
-     * 월 내에서의 주차 번호 계산
-     */
+    * 월 내에서의 주차 번호 계산
+    */
     getWeekNumberOfMonth(weekIndex) {
-      // 해당 월의 첫 번째 주부터 번호 매기기
-      const currentMonthWeeks = this.duckHuCalendarWeeks.filter((week, index) => {
-        // 해당 주의 목요일이 현재 월에 속하는지 확인 (ISO 주차 표준)
-        const thursday = week[3]; // 목요일 (인덱스 3)
-        return thursday.isCurrentMonth;
-      });
-
       // 현재 주가 몇 번째 주인지 확인
       let monthWeekNumber = 1;
       for (let i = 0; i <= weekIndex; i++) {
@@ -1077,6 +1103,106 @@ export default {
 
       return monthWeekNumber;
     },
+
+    /**
+     * 특정 일자에 지나가는 장기 일정 개수 계산
+     */
+    getLongEventCountForDay(date, weekIndex) {
+      if (!this.allWeekEvents[weekIndex]) return 0
+
+      return this.allWeekEvents[weekIndex].filter(event => {
+        const week = this.duckHuCalendarWeeks[weekIndex]
+        const dayIndex = week.findIndex(day => day.fullDate === date)
+
+        // 해당 일자에 장기 일정이 지나가는지 확인
+        return dayIndex >= event.startDayIndex && dayIndex <= event.endDayIndex
+      }).length
+    },
+
+    /**
+     * 특정 일자의 총 일정 개수 (장기 + 단기)
+     */
+    getTotalScheduleCountForDay(date, weekIndex) {
+      const longEvents = this.getLongEventCountForDay(date, weekIndex)
+      const singleDayEvents = this.getSingleDaySchedulesForDay(date).length
+
+      return longEvents + singleDayEvents
+    },
+
+    /**
+     * 표시할 단기 일정 목록 계산 (장기 일정 개수 고려)
+     */
+    getDisplayableSingleDaySchedules(date, weekIndex) {
+      const longEventCount = this.getLongEventCountForDay(date, weekIndex)
+      const singleDaySchedules = this.getSingleDaySchedulesForDay(date)
+
+      // 총 2개까지만 표시 가능하므로, 장기 일정이 있으면 그만큼 빼기
+      const maxDisplayable = Math.max(0, 2 - longEventCount)
+
+      return singleDaySchedules.slice(0, maxDisplayable)
+    },
+
+    /**
+     * date-events 영역의 동적 스타일 계산
+     */
+    getDateEventsStyle(weekIndex, dayIndex, date) {
+      // 해당 일자에 실제로 지나가는 장기 일정 개수만 계산
+      const longEventCount = this.getLongEventCountForDay(date, weekIndex)
+
+      // 장기 일정이 없으면 marginTop 없음
+      if (longEventCount === 0) {
+        return {
+          position: 'relative',
+          zIndex: 20
+        }
+      }
+
+      // PC/모바일별 이벤트 높이와 간격
+      const eventHeight = window.innerWidth <= 768 ? 16 : 20
+      const eventMargin = window.innerWidth <= 768 ? 1 : 2
+
+      // 해당 일자의 장기 일정이 차지하는 총 높이 계산
+      const longEventsTotalHeight = longEventCount * (eventHeight + eventMargin)
+
+      // 기본 여백 + 해당 일자의 장기 일정 높이만큼 아래로 밀어내기
+      const baseMarginTop = window.innerWidth <= 768 ? 8 : 12
+      const marginTop = baseMarginTop + longEventsTotalHeight
+
+      //console.log(`📐 일자 ${date}: 장기일정=${longEventCount}개, 여백=${marginTop}px`)
+
+      return {
+        marginTop: `${marginTop}px`,
+        position: 'relative',
+        zIndex: 20
+      }
+    },
+
+    /**
+     * 특정 주차의 총 일정 개수 계산 (장기 + 단일 일정 모두 포함)
+     */
+    getTotalWeekScheduleCount(weekIndex) {
+      if (!this.duckHuCalendarWeeks[weekIndex]) return 0
+
+      const week = this.duckHuCalendarWeeks[weekIndex]
+      const weekStart = week[0].fullDate
+      const weekEnd = week[6].fullDate
+
+      // 장기 일정 개수 (기존 allWeekEvents의 개수)
+      const longEventCount = this.allWeekEvents[weekIndex] ? this.allWeekEvents[weekIndex].length : 0
+
+      // 단일 일정 개수 (해당 주차에 있는 하루짜리 일정들)
+      const singleDayEventCount = this.duckHuSchedules.filter(schedule => {
+        return schedule.startDate >= weekStart &&
+              schedule.endDate <= weekEnd &&
+              schedule.startDate === schedule.endDate // 하루짜리 일정만
+      }).length
+
+      const totalCount = longEventCount + singleDayEventCount
+
+      //console.log(`📊 주차 ${weekIndex}: 장기=${longEventCount}, 단일=${singleDayEventCount}, 총=${totalCount}`)
+
+      return totalCount
+    }
   }
 }
 </script>
@@ -1217,7 +1343,7 @@ export default {
 }
 
 .date-cell.today {
-  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  background: white; /* 배경 색상 제거 */
 }
 
 .date-cell.other-month {
@@ -1234,21 +1360,101 @@ export default {
   background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
 }
 
-/* 날짜 숫자 기본 스타일 */
+/* 주차 표시 기능 - 이제 date-cell 안에 위치 */
+.week-indicator {
+  position: absolute;
+  top: -6px;
+  left: 2px;
+  font-size: 8px;
+  font-weight: 600;
+  z-index: 50;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 1px 4px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(3px);
+  transition: all 0.3s ease;
+  max-width: 45px;
+  font-family: 'Arial', sans-serif;
+}
+
+.week-indicator.has-events {
+  background: rgba(102, 126, 234, 0.15);
+  border-color: #667eea;
+  color: #667eea;
+}
+
+.week-indicator .week-number {
+  color: #666;
+  font-size: 7px;
+  white-space: nowrap;
+}
+
+.week-indicator.has-events .week-number {
+  color: #667eea;
+  font-weight: 700;
+}
+
+.week-indicator .event-count {
+  color: #667eea;
+  font-size: 7px;
+  border-radius: 6px;
+  font-weight: 600;
+  min-width: 10px;
+  text-align: center;
+}
+
+/* 날짜 헤더 영역 - 일자와 일정 개수를 한 줄에 */
+.date-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+/* 날짜 숫자 */
 .date-number {
   font-size: 16px;
   font-weight: 600;
-  margin-bottom: 4px;
   flex-shrink: 0;
   color: #333;
   position: relative;
-  z-index: 15; /* 주차 표시보다 높게 */
+  z-index: 15;
   background: rgba(255, 255, 255, 0.9);
   border-radius: 4px;
   padding: 2px 6px;
   display: inline-block;
   line-height: 1.2;
 }
+
+/* 일정 개수 표시 - 일자 옆에 작게 */
+.schedule-count-inline {
+  font-size: 10px;
+  color: #667eea;
+  background: rgba(102, 126, 234, 0.1);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 8px;
+  padding: 1px 4px;
+  font-weight: 600;
+  min-width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.today-label {
+  font-size: 10px;
+  color: #667eea;
+  font-weight: 700;
+  margin-left: 4px;
+  background: rgba(102, 126, 234, 0.1);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
 /* 일요일 텍스트 스타일 */
 .date-number.sunday-text {
   color: #dc3545 !important;
@@ -1273,15 +1479,59 @@ export default {
   font-weight: normal;
 }
 
+/* 공휴일 정보 표시 */
+.holiday-info {
+  margin-bottom: 4px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 8;
+}
+
+.holiday-main {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.holiday-name {
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 70px;
+  color: #dc3545;
+}
+
+.holiday-count {
+  background: #ff6b6b;
+  color: white;
+  font-size: 10px;
+  padding: 2px 4px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 600;
+  min-width: 20px;
+  text-align: center;
+}
+
+.holiday-count:hover {
+  background: #e55656;
+  transform: scale(1.1);
+}
+
 /* 모바일 이벤트 컨테이너 개선 */
 .date-events {
   position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   overflow: hidden;
   min-height: 0;
+  z-index: 20
 }
 
 /* 모바일 이벤트 아이템 스타일 개선 */
@@ -1301,6 +1551,8 @@ export default {
   flex-shrink: 0;
   max-width: 100%;
   box-sizing: border-box;
+  position: relative;
+  z-index: 21;
 }
 
 .mobile-event:hover {
@@ -1327,22 +1579,34 @@ export default {
   text-align: center;
   flex-shrink: 0;
   transition: all 0.2s ease;
+  position: relative;
+  z-index: 21;
 }
 
 .more-events:hover {
   background: rgba(0, 0, 0, 0.9);
 }
 
-/* 일정 표시 레이어 */
-.events-layer {
+/* 이벤트 레이어 조정 */
+.global-events-layer {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
   pointer-events: none;
-  z-index: 1; /* z-index를 2에서 1로 낮춤 - 날짜 숫자보다 아래로 */
+  z-index: 1;
   padding-top: 0;
+}
+
+.week-events-container {
+  position: relative;
+  pointer-events: none;
+  padding-top: 51px;
+}
+
+.week-events-container .event-item {
+  pointer-events: all;
 }
 
 .events-week {
@@ -1351,7 +1615,7 @@ export default {
   width: 100%;
 }
 
-/* 이벤트 아이템 스타일 - 포지셔닝 정밀 조정 */
+/* 이벤트 아이템 스타일 */
 .event-item {
   position: absolute;
   color: white;
@@ -1359,9 +1623,9 @@ export default {
   font-weight: 500;
   text-align: left;
   pointer-events: all;
-  min-height: 18px;
-  line-height: 18px;
-  /* 기본 스타일을 제거하고 JavaScript에서 완전 제어 */
+  min-height: 20px;
+  line-height: 20px;
+  z-index: 10;
 }
 
 .event-content {
@@ -1507,137 +1771,7 @@ export default {
   opacity: 0.9;
 }
 
-/* 이벤트 레이어와 주차 표시 간격 조정 */
-.global-events-layer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  pointer-events: none;
-  z-index: 1;
-  padding-top: 0;
-}
-
-.week-events-container {
-  position: relative;
-  pointer-events: none;
-}
-
-.week-events-container .event-item {
-  pointer-events: all;
-  margin-top: 20px; /* PC에서 일자 숫자와의 간격 */
-}
-
-/* 주차 표시 기능 */
-.week-indicator {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  font-size: 8px;
-  font-weight: 600;
-  z-index: 50;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  padding: 1px 4px;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(3px);
-  transition: all 0.3s ease;
-  max-width: 45px;
-  font-family: 'Arial', sans-serif;
-}
-
-.week-indicator.has-events {
-  background: rgba(102, 126, 234, 0.15);
-  border-color: #667eea;
-  color: #667eea;
-}
-
-.week-indicator .week-number {
-  color: #666;
-  font-size: 7px;
-  white-space: nowrap;
-}
-
-.week-indicator.has-events .week-number {
-  color: #667eea;
-  font-weight: 700;
-}
-
-.week-indicator .event-count {
-  background: #667eea;
-  color: white;
-  font-size: 6px;
-  padding: 1px 3px;
-  border-radius: 6px;
-  font-weight: 600;
-  min-width: 10px;
-  text-align: center;
-}
-
-/* 일정 개수 표시 - 더 아래쪽으로 이동 */
-.schedule-count {
-  font-size: 11px;
-  color: #6c757d;
-  text-align: center;
-  background: rgba(108, 117, 125, 0.1);
-  border-radius: 4px;
-  padding: 2px 4px;
-  position: absolute;
-  bottom: 2px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 8;
-}
-
-/* 공휴일 정보 표시 - 색상 유지 */
-.holiday-info {
-  margin-bottom: 4px;
-  flex-shrink: 0;
-  position: relative;
-  z-index: 8;
-}
-
-.holiday-main {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.holiday-name {
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 70px;
-  color: #dc3545; /* PC 버전과 동일한 색상 유지 */
-}
-
-.holiday-count {
-  background: #ff6b6b;
-  color: white;
-  font-size: 10px;
-  padding: 2px 4px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-weight: 600;
-  min-width: 20px;
-  text-align: center;
-}
-
-.holiday-count:hover {
-  background: #e55656;
-  transform: scale(1.1);
-}
-
-/* 모바일 반응형 디자인 */
+/* 모바일 반응형 디자인 수정 */
 @media (max-width: 768px) {
   .duckhu-calendar {
     margin: 10px;
@@ -1651,6 +1785,14 @@ export default {
   /* 데스크톱 헤더 숨김 */
   .desktop-header {
     display: none;
+  }
+
+  .date-header {
+    gap: 4px;
+  }
+
+  .week-events-container {
+    padding-top: 35px; /* 모바일에서 상단 요소들 높이 */
   }
 
   /* 모바일 헤더 표시 */
@@ -1710,28 +1852,10 @@ export default {
     padding: 6px !important;
   }
 
-  /* 날짜 숫자 모바일 최적화 */
-  .date-number {
-    font-size: 12px;
-    font-weight: 600;
-    margin-bottom: 2px;
-    position: relative;
-    top: 0;
-    left: 0;
-    z-index: 15;
-    background: rgba(255, 255, 255, 0.95);
-    border-radius: 4px;
-    padding: 2px 4px;
-    display: inline-block;
-    line-height: 1.2;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    max-width: calc(100% - 50px); /* 주차 표시 공간 확보 */
-  }
-
   /* 주차 표시 모바일 최적화 */
   .week-indicator {
-    top: 2px;
-    right: 2px;
+    top: 1px;
+    left: 1px;
     font-size: 7px;
     padding: 1px 3px;
     border-radius: 3px;
@@ -1750,30 +1874,37 @@ export default {
     min-width: 8px;
   }
 
-  /* 일정 개수 표시 모바일 최적화 */
-  .schedule-count {
-    font-size: 9px;
-    padding: 1px 3px;
-    bottom: 1px;
+  .date-number {
+    font-size: 12px;
+    padding: 2px 4px;
   }
 
-  /* 공휴일 모바일 최적화 - 색상 유지 */
+  .schedule-count-inline {
+    font-size: 8px;
+    padding: 1px 3px;
+    min-width: 12px;
+  }
+
+  .today-label {
+    font-size: 8px;
+    margin-left: 2px;
+    padding: 1px 2px;
+  }
+
+  /* 공휴일 모바일 최적화 */
   .holiday-name {
     font-size: 9px;
     max-width: 35px;
-    color: #dc3545; /* PC와 동일한 색상 유지 */
-    background: rgba(255, 255, 255, 0.8);
-    padding: 1px 2px;
-    border-radius: 2px;
+    color: #dc3545;
   }
 
   .holiday-count {
     font-size: 8px;
     padding: 1px 3px;
-    background: #ff6b6b; /* PC와 동일한 색상 유지 */
+    background: #ff6b6b;
   }
 
-  /* 모바일 이벤트 컨테이너 개선 */
+  /* 모바일 이벤트 컨테이너 */
   .date-events {
     position: relative;
     flex: 1;
@@ -1785,46 +1916,34 @@ export default {
     margin-top: 8px;
   }
 
-  /* 모바일에서 이벤트 아이템 위치 조정 */
-  .week-events-container .event-item {
-    margin-top: 15px;
-  }
-
   /* events-week 높이를 모바일 date-cell과 맞춤 */
   .events-week {
     height: 70px !important;
   }
 
-  /* 모바일 이벤트 아이템 크기 더 작게 조정 */
+  /* 모바일 이벤트 아이템 크기 */
   .mobile-event {
     font-size: 8px !important;
     padding: 1px 2px !important;
-    min-height: 10px !important;
+    min-height: 12px !important;
     line-height: 1 !important;
     margin-bottom: 1px;
   }
 
   /* 더 많은 이벤트가 있을 때 표시 */
   .more-events {
-    position: absolute;
-    bottom: 12px; /* schedule-count와 겹치지 않게 위치 조정 */
-    right: 2px;
-    background: rgba(0, 0, 0, 0.7);
-    color: white;
     font-size: 7px;
     padding: 1px 2px;
-    border-radius: 2px;
-    z-index: 10;
   }
 
-  /* 오늘 날짜 하이라이트 */
+  /* 오늘 날짜 배경 제거 */
   .date-cell.today {
-    background-color: rgba(102, 126, 234, 0.1);
+    background: white;
   }
 
   .date-cell.today .date-number {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
+    background: rgba(255, 255, 255, 0.95);
+    color: #333;
   }
 
   /* 다른 달 날짜 */
@@ -1833,8 +1952,9 @@ export default {
   }
 
   .event-item {
-    font-size: 9px; /* 모바일에서 이벤트 라인 크기 더 작게 */
-    min-height: 14px;
+    min-height: 16px;
+    line-height: 16px;
+    font-size: 10px;
   }
 
   .event-time {
@@ -1870,18 +1990,12 @@ export default {
     padding: 4px !important;
   }
 
-  .date-number {
-    font-size: 10px;
-    padding: 1px 3px;
-    max-width: calc(100% - 45px);
-  }
-
   .week-indicator {
     top: 1px;
-    right: 1px;
+    left: 1px;
     font-size: 6px;
     padding: 1px 2px;
-    max-width: 35px;
+    max-width: 30px;
   }
 
   .week-indicator .week-number {
@@ -1894,21 +2008,39 @@ export default {
     min-width: 6px;
   }
 
-  .schedule-count {
-    font-size: 8px;
+  .week-events-container {
+    padding-top: 28px; /* 초소형에서 상단 요소들 높이 */
+  }
+
+  .date-header {
+    gap: 2px;
+  }
+
+  .date-number {
+    font-size: 10px;
+    padding: 1px 3px;
+  }
+
+  .schedule-count-inline {
+    font-size: 7px;
     padding: 1px 2px;
-    bottom: 1px;
+    min-width: 10px;
+  }
+
+  .today-label {
+    font-size: 7px;
+    margin-left: 1px;
+    padding: 1px;
   }
 
   .mobile-event {
-    height: 8px !important;
+    height: 10px !important;
     font-size: 6px !important;
     padding: 0 1px !important;
     line-height: 8px !important;
   }
 
   .more-events {
-    bottom: 10px;
     font-size: 6px;
     padding: 1px;
   }
@@ -1918,7 +2050,7 @@ export default {
   }
 
   .week-events-container .event-item {
-    margin-top: 12px;
+    top: 33px;
     min-height: 12px;
   }
 
@@ -1944,7 +2076,7 @@ export default {
 
   .holiday-name {
     font-size: 8px;
-    max-width: 30px;
+    max-width: 25px;
   }
 
   .holiday-count {
@@ -1953,7 +2085,9 @@ export default {
   }
 
   .event-item {
-    font-size: 8px;
+    min-height: 14px;
+    line-height: 14px;
+    font-size: 9px;
   }
 
   .event-time {
