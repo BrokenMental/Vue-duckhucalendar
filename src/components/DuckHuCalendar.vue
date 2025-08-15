@@ -96,14 +96,17 @@
                       'other-month-text': day.isOtherMonth
                     }">
                   {{ day.dateNumber }}
-                  <!-- 오늘 날짜 표시 -->
-                  <span v-if="isDuckHuToday(new Date(day.fullDate + 'T00:00:00'))" class="today-label">Today</span>
                 </div>
 
                 <!-- 일정 개수 표시를 일자 옆으로 이동 -->
                 <div v-if="getTotalScheduleCountForDay(day.fullDate, weekIndex) > 0" class="schedule-count-inline">
                   {{ getTotalScheduleCountForDay(day.fullDate, weekIndex) }} 개
                 </div>
+              </div>
+
+              <!-- Today 라벨 -->
+              <div v-if="isDuckHuToday(new Date(day.fullDate + 'T00:00:00'))" class="today-label">
+                Today
               </div>
 
               <!-- 공휴일 표시 -->
@@ -1446,13 +1449,19 @@ export default {
 }
 
 .today-label {
-  font-size: 10px;
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  font-size: 8px;
   color: #667eea;
   font-weight: 700;
-  margin-left: 4px;
-  background: rgba(102, 126, 234, 0.1);
-  padding: 1px 4px;
+  background: rgba(102, 126, 234, 0.15);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  padding: 1px 3px;
   border-radius: 3px;
+  z-index: 25;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 /* 일요일 텍스트 스타일 */
@@ -1886,9 +1895,11 @@ export default {
   }
 
   .today-label {
-    font-size: 8px;
-    margin-left: 2px;
-    padding: 1px 2px;
+    font-size: 6px;
+    padding: 1px;
+    bottom: 0;
+    right: 2px;
+    border-radius: 1px;
   }
 
   /* 공휴일 모바일 최적화 */
@@ -1913,7 +1924,7 @@ export default {
     gap: 1px;
     overflow: hidden;
     min-height: 0;
-    margin-top: 8px;
+    margin-top: 0;
   }
 
   /* events-week 높이를 모바일 date-cell과 맞춤 */
@@ -2028,9 +2039,8 @@ export default {
   }
 
   .today-label {
-    font-size: 7px;
-    margin-left: 1px;
-    padding: 1px;
+    padding: 0;
+    min-width: 20px;
   }
 
   .mobile-event {
@@ -2043,10 +2053,6 @@ export default {
   .more-events {
     font-size: 6px;
     padding: 1px;
-  }
-
-  .date-events {
-    margin-top: 6px;
   }
 
   .week-events-container .event-item {
