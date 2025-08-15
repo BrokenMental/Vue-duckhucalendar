@@ -79,7 +79,7 @@
               @click="handleDateCellClick(day)"
             >
               <!-- 주차 표시 - 매주 첫번째 날(일요일)에만 표시 -->
-              <div v-if="dayIndex === 0" class="week-indicator"
+              <div v-if="dayIndex === 0 && getWeekNumberOfMonth(weekIndex) > 0" class="week-indicator"
                   :class="{ 'has-events': getTotalWeekScheduleCount(weekIndex) > 0 }">
                 <span class="week-number">{{ getWeekNumberOfMonth(weekIndex) }}주차</span>
                 <span v-if="getTotalWeekScheduleCount(weekIndex) > 0"
@@ -1054,7 +1054,7 @@ export default {
       const width = (event.endDayIndex - event.startDayIndex + 1) * cellWidth
 
       // top 값을 행별로 정확히 계산 - 각 행마다 (높이 + 간격)만큼 아래로
-      const baseTop = window.innerWidth <= 768 ? 35 : 40; // 기본 시작 위치
+      const baseTop = window.innerWidth <= 768 ? 22 : 40; // 모바일: 22px, PC: 40px
       const top = baseTop + (event.rowIndex * (eventHeight + eventMargin))
 
       //console.log(`🎨 ${event.schedule.title}: 행${event.rowIndex}, top=${top}px`)
@@ -1067,7 +1067,7 @@ export default {
       return {
         position: 'absolute',
         left: `${left}px`,
-        top: `${top}px`, // top 값 복원
+        top: `${top}px`,
         width: `${Math.max(width - 2, 20)}px`,
         height: `${eventHeight}px`,
         background: backgroundColor,
@@ -1094,13 +1094,24 @@ export default {
     * 월 내에서의 주차 번호 계산
     */
     getWeekNumberOfMonth(weekIndex) {
-      // 현재 주가 몇 번째 주인지 확인
-      let monthWeekNumber = 1;
+      const week = this.duckHuCalendarWeeks[weekIndex];
+      if (!week) return 0;
+
+      // 해당 주차에 현재 월의 일자가 있는지 확인
+      const hasCurrentMonthDays = week.some(day => day.isCurrentMonth);
+
+      // 현재 월 일자가 없으면 0주차 (이전/다음월)
+      if (!hasCurrentMonthDays) {
+        return 0;
+      }
+
+      // 현재 월의 주차 번호 계산
+      let monthWeekNumber = 0;
       for (let i = 0; i <= weekIndex; i++) {
-        const week = this.duckHuCalendarWeeks[i];
-        if (week && week[3].isCurrentMonth) { // 목요일이 현재 월에 속하면
-          if (i === weekIndex) return monthWeekNumber;
+        const weekToCheck = this.duckHuCalendarWeeks[i];
+        if (weekToCheck && weekToCheck.some(day => day.isCurrentMonth)) {
           monthWeekNumber++;
+          if (i === weekIndex) return monthWeekNumber;
         }
       }
 
@@ -1801,7 +1812,7 @@ export default {
   }
 
   .week-events-container {
-    padding-top: 35px; /* 모바일에서 상단 요소들 높이 */
+    padding-top: 0;
   }
 
   /* 모바일 헤더 표시 */
@@ -1863,7 +1874,7 @@ export default {
 
   /* 주차 표시 모바일 최적화 */
   .week-indicator {
-    top: 1px;
+    top: -4px;
     left: 1px;
     font-size: 7px;
     padding: 1px 3px;
@@ -1929,7 +1940,7 @@ export default {
 
   /* events-week 높이를 모바일 date-cell과 맞춤 */
   .events-week {
-    height: 70px !important;
+    height: 60px !important;
   }
 
   /* 모바일 이벤트 아이템 크기 */
@@ -2002,7 +2013,7 @@ export default {
   }
 
   .week-indicator {
-    top: 1px;
+    top: -5px;
     left: 1px;
     font-size: 6px;
     padding: 1px 2px;
@@ -2017,10 +2028,6 @@ export default {
     font-size: 4px;
     padding: 1px;
     min-width: 6px;
-  }
-
-  .week-events-container {
-    padding-top: 28px; /* 초소형에서 상단 요소들 높이 */
   }
 
   .date-header {
@@ -2053,15 +2060,6 @@ export default {
   .more-events {
     font-size: 6px;
     padding: 1px;
-  }
-
-  .week-events-container .event-item {
-    top: 33px;
-    min-height: 12px;
-  }
-
-  .events-week {
-    height: 60px !important;
   }
 
   /* 캘린더 헤더 조정 */
