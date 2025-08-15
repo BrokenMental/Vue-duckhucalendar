@@ -144,11 +144,11 @@
             class="week-events-container"
             :style="getWeekContainerStyle(weekIndex)"
           >
-            <!-- 디버깅용 주차 정보 -->
-            <div v-if="events.length > 0"
-                 class="debug-week-info"
-                 style="position: absolute; top: 0; left: 0; font-size: 10px; color: red; z-index: 100; background: white; padding: 2px;">
-              Week {{ weekIndex }}: {{ events.length }}개
+            <!-- 주차 표시 기능 -->
+            <div class="week-indicator"
+                :class="{ 'has-events': events.length > 0 }">
+              <span class="week-number">{{ getWeekNumberOfMonth(weekIndex) }}주차</span>
+              <span v-if="events.length > 0" class="event-count">{{ events.length }}개</span>
             </div>
 
             <div
@@ -1052,7 +1052,31 @@ export default {
         fontSize: window.innerWidth <= 768 ? '11px' : '12px', // 모바일에서 글자 크기 조정
         fontWeight: '500'
       }
-    }
+    },
+
+    /**
+     * 월 내에서의 주차 번호 계산
+     */
+    getWeekNumberOfMonth(weekIndex) {
+      // 해당 월의 첫 번째 주부터 번호 매기기
+      const currentMonthWeeks = this.duckHuCalendarWeeks.filter((week, index) => {
+        // 해당 주의 목요일이 현재 월에 속하는지 확인 (ISO 주차 표준)
+        const thursday = week[3]; // 목요일 (인덱스 3)
+        return thursday.isCurrentMonth;
+      });
+
+      // 현재 주가 몇 번째 주인지 확인
+      let monthWeekNumber = 1;
+      for (let i = 0; i <= weekIndex; i++) {
+        const week = this.duckHuCalendarWeeks[i];
+        if (week && week[3].isCurrentMonth) { // 목요일이 현재 월에 속하면
+          if (i === weekIndex) return monthWeekNumber;
+          monthWeekNumber++;
+        }
+      }
+
+      return monthWeekNumber;
+    },
   }
 }
 </script>
@@ -1218,14 +1242,13 @@ export default {
   flex-shrink: 0;
   color: #333;
   position: relative;
-  z-index: 10; /* z-index를 더 높게 설정하여 확실히 상위에 표시 */
-  background: rgba(255, 255, 255, 0.9); /* 반투명 배경 추가 */
+  z-index: 15; /* 주차 표시보다 높게 */
+  background: rgba(255, 255, 255, 0.9);
   border-radius: 4px;
   padding: 2px 6px;
   display: inline-block;
   line-height: 1.2;
 }
-
 /* 일요일 텍스트 스타일 */
 .date-number.sunday-text {
   color: #dc3545 !important;
@@ -1248,58 +1271,6 @@ export default {
 .date-number.other-month-text {
   color: #adb5bd !important;
   font-weight: normal;
-}
-
-/* 공휴일 정보 표시 */
-.holiday-info {
-  margin-bottom: 4px;
-  flex-shrink: 0;
-}
-
-.holiday-main {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.holiday-name {
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 70px;
-  color: #dc3545;
-}
-
-.holiday-count {
-  background: #ff6b6b;
-  color: white;
-  font-size: 10px;
-  padding: 2px 4px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-weight: 600;
-  min-width: 20px;
-  text-align: center;
-}
-
-.holiday-count:hover {
-  background: #e55656;
-  transform: scale(1.1);
-}
-
-/* 일정 개수 표시 */
-.schedule-count {
-  font-size: 11px;
-  color: #6c757d;
-  margin-top: auto;
-  text-align: center;
-  background: rgba(108, 117, 125, 0.1);
-  border-radius: 4px;
-  padding: 2px 4px;
 }
 
 /* 모바일 이벤트 컨테이너 개선 */
@@ -1536,6 +1507,136 @@ export default {
   opacity: 0.9;
 }
 
+/* 이벤트 레이어와 주차 표시 간격 조정 */
+.global-events-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 1;
+  padding-top: 0;
+}
+
+.week-events-container {
+  position: relative;
+  pointer-events: none;
+}
+
+.week-events-container .event-item {
+  pointer-events: all;
+  margin-top: 20px; /* PC에서 일자 숫자와의 간격 */
+}
+
+/* 주차 표시 기능 */
+.week-indicator {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 8px;
+  font-weight: 600;
+  z-index: 50;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 1px 4px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(3px);
+  transition: all 0.3s ease;
+  max-width: 45px;
+  font-family: 'Arial', sans-serif;
+}
+
+.week-indicator.has-events {
+  background: rgba(102, 126, 234, 0.15);
+  border-color: #667eea;
+  color: #667eea;
+}
+
+.week-indicator .week-number {
+  color: #666;
+  font-size: 7px;
+  white-space: nowrap;
+}
+
+.week-indicator.has-events .week-number {
+  color: #667eea;
+  font-weight: 700;
+}
+
+.week-indicator .event-count {
+  background: #667eea;
+  color: white;
+  font-size: 6px;
+  padding: 1px 3px;
+  border-radius: 6px;
+  font-weight: 600;
+  min-width: 10px;
+  text-align: center;
+}
+
+/* 일정 개수 표시 - 더 아래쪽으로 이동 */
+.schedule-count {
+  font-size: 11px;
+  color: #6c757d;
+  text-align: center;
+  background: rgba(108, 117, 125, 0.1);
+  border-radius: 4px;
+  padding: 2px 4px;
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 8;
+}
+
+/* 공휴일 정보 표시 - 색상 유지 */
+.holiday-info {
+  margin-bottom: 4px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 8;
+}
+
+.holiday-main {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.holiday-name {
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 70px;
+  color: #dc3545; /* PC 버전과 동일한 색상 유지 */
+}
+
+.holiday-count {
+  background: #ff6b6b;
+  color: white;
+  font-size: 10px;
+  padding: 2px 4px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 600;
+  min-width: 20px;
+  text-align: center;
+}
+
+.holiday-count:hover {
+  background: #e55656;
+  transform: scale(1.1);
+}
+
 /* 모바일 반응형 디자인 */
 @media (max-width: 768px) {
   .duckhu-calendar {
@@ -1593,62 +1694,125 @@ export default {
 
   /* 요일 헤더 모바일 최적화 */
   .weekday-cell {
-    padding: 10px 4px;
+    padding: 8px 4px;
     font-size: 12px;
   }
 
   /* 모바일에서 주간 행 간격 조정 */
   .week-row {
     border-bottom: 1px solid #e9ecef;
-    min-height: 80px;
+    min-height: 70px;
   }
 
   /* 날짜 셀 모바일 최적화 */
   .date-cell {
-    height: 80px !important;
-    padding: 4px !important;
+    height: 70px !important;
+    padding: 6px !important;
   }
 
-  /* 날짜 숫자 표시 개선 */
+  /* 날짜 숫자 모바일 최적화 */
   .date-number {
     font-size: 12px;
     font-weight: 600;
     margin-bottom: 2px;
-    position: sticky;
-    top: 2px;
-    z-index: 5;
-    background: rgba(255, 255, 255, 0.9);
+    position: relative;
+    top: 0;
+    left: 0;
+    z-index: 15;
+    background: rgba(255, 255, 255, 0.95);
     border-radius: 4px;
-    padding: 1px 4px;
+    padding: 2px 4px;
     display: inline-block;
     line-height: 1.2;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    max-width: calc(100% - 50px); /* 주차 표시 공간 확보 */
   }
 
-  /* 이벤트 컨테이너 모바일 최적화 */
+  /* 주차 표시 모바일 최적화 */
+  .week-indicator {
+    top: 2px;
+    right: 2px;
+    font-size: 7px;
+    padding: 1px 3px;
+    border-radius: 3px;
+    gap: 1px;
+    max-width: 40px;
+  }
+
+  .week-indicator .week-number {
+    font-size: 6px;
+  }
+
+  .week-indicator .event-count {
+    font-size: 5px;
+    padding: 1px 2px;
+    border-radius: 4px;
+    min-width: 8px;
+  }
+
+  /* 일정 개수 표시 모바일 최적화 */
+  .schedule-count {
+    font-size: 9px;
+    padding: 1px 3px;
+    bottom: 1px;
+  }
+
+  /* 공휴일 모바일 최적화 - 색상 유지 */
+  .holiday-name {
+    font-size: 9px;
+    max-width: 35px;
+    color: #dc3545; /* PC와 동일한 색상 유지 */
+    background: rgba(255, 255, 255, 0.8);
+    padding: 1px 2px;
+    border-radius: 2px;
+  }
+
+  .holiday-count {
+    font-size: 8px;
+    padding: 1px 3px;
+    background: #ff6b6b; /* PC와 동일한 색상 유지 */
+  }
+
+  /* 모바일 이벤트 컨테이너 개선 */
   .date-events {
     position: relative;
-    height: calc(100% - 20px);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
     overflow: hidden;
+    min-height: 0;
+    margin-top: 8px;
   }
 
-  /* 모바일 이벤트 아이템 크기 조정 */
+  /* 모바일에서 이벤트 아이템 위치 조정 */
+  .week-events-container .event-item {
+    margin-top: 15px;
+  }
+
+  /* events-week 높이를 모바일 date-cell과 맞춤 */
+  .events-week {
+    height: 70px !important;
+  }
+
+  /* 모바일 이벤트 아이템 크기 더 작게 조정 */
   .mobile-event {
-    font-size: 9px !important;
-    padding: 1px 3px !important;
-    min-height: 14px !important;
-    line-height: 1.1 !important;
+    font-size: 8px !important;
+    padding: 1px 2px !important;
+    min-height: 10px !important;
+    line-height: 1 !important;
     margin-bottom: 1px;
   }
 
   /* 더 많은 이벤트가 있을 때 표시 */
   .more-events {
     position: absolute;
-    bottom: 2px;
+    bottom: 12px; /* schedule-count와 겹치지 않게 위치 조정 */
     right: 2px;
     background: rgba(0, 0, 0, 0.7);
     color: white;
-    font-size: 8px;
-    padding: 1px 3px;
+    font-size: 7px;
+    padding: 1px 2px;
     border-radius: 2px;
     z-index: 10;
   }
@@ -1668,35 +1832,21 @@ export default {
     opacity: 0.3;
   }
 
-  .holiday-name {
-    font-size: 9px;
-    max-width: 40px;
-  }
-
-  .holiday-count {
-    font-size: 8px;
-    padding: 1px 3px;
-  }
-
-  .schedule-count {
-    font-size: 9px;
-    padding: 1px 2px;
-  }
-
   .event-item {
-    font-size: 10px;
+    font-size: 9px; /* 모바일에서 이벤트 라인 크기 더 작게 */
+    min-height: 14px;
   }
 
   .event-time {
-    font-size: 9px;
+    font-size: 8px;
   }
 
   .event-title {
-    font-size: 9px;
+    font-size: 8px;
   }
 
   .event-title.with-time {
-    font-size: 8px;
+    font-size: 7px;
   }
 
   .holiday-modal {
@@ -1717,23 +1867,68 @@ export default {
 @media (max-width: 480px) {
   .date-cell {
     height: 60px !important;
-    padding: 2px !important;
-  }
-
-  .mobile-event {
-    height: 12px !important;
-    font-size: 8px !important;
-    padding: 0 2px !important;
-    line-height: 12px !important;
+    padding: 4px !important;
   }
 
   .date-number {
     font-size: 10px;
+    padding: 1px 3px;
+    max-width: calc(100% - 45px);
+  }
+
+  .week-indicator {
+    top: 1px;
+    right: 1px;
+    font-size: 6px;
+    padding: 1px 2px;
+    max-width: 35px;
+  }
+
+  .week-indicator .week-number {
+    font-size: 5px;
+  }
+
+  .week-indicator .event-count {
+    font-size: 4px;
+    padding: 1px;
+    min-width: 6px;
+  }
+
+  .schedule-count {
+    font-size: 8px;
+    padding: 1px 2px;
+    bottom: 1px;
+  }
+
+  .mobile-event {
+    height: 8px !important;
+    font-size: 6px !important;
+    padding: 0 1px !important;
+    line-height: 8px !important;
+  }
+
+  .more-events {
+    bottom: 10px;
+    font-size: 6px;
+    padding: 1px;
+  }
+
+  .date-events {
+    margin-top: 6px;
+  }
+
+  .week-events-container .event-item {
+    margin-top: 12px;
+    min-height: 12px;
+  }
+
+  .events-week {
+    height: 60px !important;
   }
 
   /* 캘린더 헤더 조정 */
   .weekday-cell {
-    padding: 8px 2px;
+    padding: 6px 2px;
     font-size: 11px;
   }
 
@@ -1745,6 +1940,32 @@ export default {
   .mobile-select {
     padding: 4px 6px;
     font-size: 12px;
+  }
+
+  .holiday-name {
+    font-size: 8px;
+    max-width: 30px;
+  }
+
+  .holiday-count {
+    font-size: 7px;
+    padding: 1px 2px;
+  }
+
+  .event-item {
+    font-size: 8px;
+  }
+
+  .event-time {
+    font-size: 7px;
+  }
+
+  .event-title {
+    font-size: 7px;
+  }
+
+  .event-title.with-time {
+    font-size: 6px;
   }
 }
 </style>
