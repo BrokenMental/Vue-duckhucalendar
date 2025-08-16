@@ -1055,16 +1055,18 @@ export default {
         cellHeight = 120 // PC
       }
 
-      const top = weekIndex * cellHeight
+      // ✅ 핵심 수정: border-bottom 1px 누적 고려
+      const borderOffset = weekIndex * 1 // 각 week-row마다 border-bottom 1px씩 누적
+      const top = (weekIndex * cellHeight) + borderOffset
 
-      console.log(`📐 주차 ${weekIndex}: cellHeight=${cellHeight}px, top=${top}px`)
+      console.log(`🔍 주차 ${weekIndex}: cellHeight=${cellHeight}px, borderOffset=${borderOffset}px, top=${top}px`)
 
       return {
         position: 'absolute',
         top: `${top}px`,
         left: '0',
         right: '0',
-        height: `${cellHeight}px`, // 중요: 높이를 셀과 정확히 맞춤
+        height: `${cellHeight}px`,
         width: '100%',
         pointerEvents: 'none',
         zIndex: 2
@@ -1125,12 +1127,12 @@ export default {
       const left = event.startDayIndex * cellWidth
       const width = (event.endDayIndex - event.startDayIndex + 1) * cellWidth
 
-      // ✅ 수정: 동적으로 baseTop 계산 (getDateEventsTopPosition 로직을 직접 구현)
+      // ✅ 핵심 수정: getDateEventsTopPosition과 동일한 로직으로 baseTop 계산
+      const weekIndex = event.weekIndex || 0
       let baseTop = 0
 
       // 1. 주차 표시 높이 (있을 경우에만)
-      const weekIndex = event.weekIndex || 0
-      const hasWeekIndicator = this.getWeekNumberOfMonth && this.getWeekNumberOfMonth(weekIndex) > 0
+      const hasWeekIndicator = this.getWeekNumberOfMonth(weekIndex) > 0
       if (hasWeekIndicator) {
         baseTop += window.innerWidth <= 768 ? 12 : 16 // 주차 표시 높이
       }
@@ -1139,10 +1141,10 @@ export default {
       baseTop += window.innerWidth <= 768 ? 18 : 24 // 날짜 숫자 높이
 
       // 3. 공휴일 정보 높이 (있을 경우 추가)
-      if (this.duckHuCalendarWeeks && this.duckHuCalendarWeeks[weekIndex]) {
-        const week = this.duckHuCalendarWeeks[weekIndex]
+      const week = this.duckHuCalendarWeeks[weekIndex]
+      if (week) {
         const hasHolidays = week.some(day =>
-          this.holidaysByDate && this.holidaysByDate[day.fullDate] && this.holidaysByDate[day.fullDate].length > 0
+          this.holidaysByDate[day.fullDate] && this.holidaysByDate[day.fullDate].length > 0
         )
         if (hasHolidays) {
           baseTop += window.innerWidth <= 768 ? 14 : 16 // 공휴일 표시 높이
