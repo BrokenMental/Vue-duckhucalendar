@@ -475,31 +475,28 @@ export default {
     },
 
     /**
-     * DuckHu 셀 너비 계산 - 정확한 이벤트 위치를 위한 계산
+     * 현재 화면 크기에 따른 셀 높이 반환
+     */
+    getCurrentCellHeight() {
+      if (window.innerWidth <= 480) {
+        return 75
+      } else if (window.innerWidth <= 768) {
+        return 90
+      } else {
+        return 120
+      }
+    },
+
+    /**
+     * 캘린더 셀 너비 계산 개선
      */
     calculateDuckHuCellWidth() {
       this.$nextTick(() => {
         const container = this.$refs.duckHuCalendarContainer
         if (container) {
-          // 컨테이너의 실제 너비에서 7로 나누어 각 셀의 너비 계산
-          const containerWidth = container.clientWidth // offsetWidth 대신 clientWidth 사용 (패딩 제외)
+          const containerWidth = container.clientWidth
           this.DUCKHU_CELL_WIDTH = containerWidth / 7
-
-          // 화면 크기에 따른 셀 높이 조정
-          if (window.innerWidth <= 480) {
-            this.DUCKHU_CELL_HEIGHT = 60 // 초소형 모바일
-          } else if (window.innerWidth <= 768) {
-            this.DUCKHU_CELL_HEIGHT = 80 // 모바일
-          } else {
-            this.DUCKHU_CELL_HEIGHT = 120 // 데스크톱
-          }
-
-          console.log('Cell dimensions:', {
-            width: this.DUCKHU_CELL_WIDTH,
-            height: this.DUCKHU_CELL_HEIGHT,
-            containerWidth: containerWidth,
-            screenWidth: window.innerWidth
-          })
+          console.log(`📐 셀 너비 업데이트: ${this.DUCKHU_CELL_WIDTH}px`)
         }
       })
     },
@@ -857,22 +854,84 @@ export default {
     },
 
     /**
-     * 모든 주차의 이벤트를 미리 계산 (성능 및 정확성 향상)
-     */
+    * 모든 주차의 이벤트를 미리 계산
+    */
     calculateAllWeekEvents() {
       const allWeekEvents = {}
 
+      // 1. 먼저 모든 장기 일정을 수집하고 전역 행 번호 할당
+      const globalRowAssignments = this.assignGlobalRows()
+
+      // 2. 각 주차별로 이벤트 배치
       this.duckHuCalendarWeeks.forEach((week, weekIndex) => {
-        allWeekEvents[weekIndex] = this.calculateEventsForWeek(week, weekIndex)
+        allWeekEvents[weekIndex] = this.calculateEventsForWeek(week, weekIndex, globalRowAssignments)
       })
 
       return allWeekEvents
     },
 
     /**
-     * 특정 주의 이벤트만 계산하는 순수 함수
+     * 모든 장기 일정에 전역 행 번호 할당
      */
-    calculateEventsForWeek(week, weekIndex) {
+    assignGlobalRows() {
+      const globalRowAssignments = new Map() // scheduleId -> rowIndex
+      const allLongSchedules = this.duckHuSchedules.filter(schedule =>
+        schedule.startDate !== schedule.endDate
+      )
+
+      // 시작일 기준으로 정렬
+      allLongSchedules.sort((a, b) => {
+        const dateCompare = a.startDate.localeCompare(b.startDate)
+        if (dateCompare !== 0) return dateCompare
+
+        if (a.priority !== b.priority) {
+          return a.priority - b.priority
+        }
+        return a.title.localeCompare(b.title)
+      })
+
+      const usedRows = [] // 각 행별로 사용 중인 기간 저장
+
+      allLongSchedules.forEach(schedule => {
+        let assignedRow = 0
+
+        // 겹치지 않는 행 찾기
+        while (assignedRow < 10) {
+          const hasConflict = usedRows[assignedRow] && usedRows[assignedRow].some(period => {
+            return !(schedule.endDate < period.start || schedule.startDate > period.end)
+          })
+
+          if (!hasConflict) {
+            // 해당 행에 일정 기간 추가
+            if (!usedRows[assignedRow]) {
+              usedRows[assignedRow] = []
+            }
+            usedRows[assignedRow].push({
+              start: schedule.startDate,
+              end: schedule.endDate,
+              scheduleId: schedule.id
+            })
+
+            globalRowAssignments.set(schedule.id, assignedRow)
+            console.log(`🌍 전역 행 할당: ${schedule.title} -> 행 ${assignedRow}`)
+            break
+          }
+
+          assignedRow++
+        }
+
+        if (assignedRow >= 10) {
+          globalRowAssignments.set(schedule.id, 9)
+        }
+      })
+
+      return globalRowAssignments
+    },
+
+    /**
+     * 특정 주의 이벤트만 계산하는 순수 함수 (전역 행 정보 사용)
+     */
+    calculateEventsForWeek(week, weekIndex, globalRowAssignments) {
       const weekStart = week[0].fullDate
       const weekEnd = week[6].fullDate
       const events = []
@@ -884,22 +943,6 @@ export default {
               schedule.startDate !== schedule.endDate
       })
 
-      // 시작일 기준으로 정렬 (우선순위보다 시작일을 우선)
-      weekMultiDaySchedules.sort((a, b) => {
-        const dateCompare = a.startDate.localeCompare(b.startDate)
-        if (dateCompare !== 0) return dateCompare
-
-        if (a.priority !== b.priority) {
-          return a.priority - b.priority
-        }
-        return a.title.localeCompare(b.title) // 제목으로 최종 정렬
-      })
-
-      // 행 배치를 위한 배열 - 완전 초기화
-      const rowAssignments = []
-
-      console.log(`📅 주차 ${weekIndex} 이벤트 배치 시작:`, weekMultiDaySchedules.map(s => s.title))
-
       weekMultiDaySchedules.forEach((schedule) => {
         // 이 주차에서 보여질 이벤트의 시작일과 종료일
         const eventStartDate = schedule.startDate > weekStart ? schedule.startDate : weekStart
@@ -909,21 +952,8 @@ export default {
         const endDayIndex = week.findIndex(day => day.fullDate === eventEndDate)
 
         if (startDayIndex !== -1 && endDayIndex !== -1) {
-          console.log(`🔍 ${schedule.title}: ${startDayIndex}-${endDayIndex}`)
-
-          // 겹치지 않는 행 찾기
-          const assignedRow = this.findAvailableRow(rowAssignments, startDayIndex, endDayIndex)
-
-          // 행 정보 저장
-          const assignment = {
-            schedule: schedule,
-            startDay: startDayIndex,
-            endDay: endDayIndex,
-            row: assignedRow
-          }
-          rowAssignments.push(assignment)
-
-          console.log(`✅ ${schedule.title} -> 행 ${assignedRow} 배치`)
+          // 전역 행 번호 사용
+          const assignedRow = globalRowAssignments.get(schedule.id) || 0
 
           // 겹치는 일정 개수 계산
           const overlappingCount = this.getOverlappingCount(schedule, weekMultiDaySchedules, eventStartDate, eventEndDate)
@@ -947,10 +977,11 @@ export default {
             eventCount: overlappingCount,
             key: `${schedule.id}-week${weekIndex}-row${assignedRow}`
           })
+
+          console.log(`📅 주차 ${weekIndex}: ${schedule.title} -> 행 ${assignedRow}`)
         }
       })
 
-      console.log(`📊 주차 ${weekIndex} 최종 배치:`, events.map(e => `${e.schedule.title}(행${e.rowIndex})`))
       return events
     },
 
@@ -1015,15 +1046,25 @@ export default {
      * 주차별 컨테이너 위치 스타일 계산
      */
     getWeekContainerStyle(weekIndex) {
-      const cellHeight = this.DUCKHU_CELL_HEIGHT
+      let cellHeight
+      if (window.innerWidth <= 480) {
+        cellHeight = 75 // 초소형 모바일
+      } else if (window.innerWidth <= 768) {
+        cellHeight = 90 // 모바일
+      } else {
+        cellHeight = 120 // PC
+      }
+
       const top = weekIndex * cellHeight
+
+      console.log(`📐 주차 ${weekIndex}: cellHeight=${cellHeight}px, top=${top}px`)
 
       return {
         position: 'absolute',
         top: `${top}px`,
         left: '0',
         right: '0',
-        height: `${cellHeight}px`,
+        height: `${cellHeight}px`, // 중요: 높이를 셀과 정확히 맞춤
         width: '100%',
         pointerEvents: 'none',
         zIndex: 2
@@ -1031,7 +1072,38 @@ export default {
     },
 
     /**
-     * 이벤트 스타일 가져오기 - 주차별 상대 위치 계산 (디버깅 포함)
+     * 실제 date-events 영역의 DOM 위치 계산
+     */
+    getActualDateEventsPosition(weekIndex, dayIndex) {
+      try {
+        // 해당 셀의 date-events 요소를 찾기
+        const weekRow = document.querySelectorAll('.week-row')[weekIndex]
+        if (!weekRow) return 54 // 기본값
+
+        const dateCell = weekRow.querySelectorAll('.date-cell')[dayIndex]
+        if (!dateCell) return 54 // 기본값
+
+        const dateEvents = dateCell.querySelector('.date-events')
+        if (!dateEvents) return 54 // 기본값
+
+        // 부모 date-cell 대비 date-events의 상대 위치 계산
+        const cellRect = dateCell.getBoundingClientRect()
+        const eventsRect = dateEvents.getBoundingClientRect()
+
+        const relativeTop = eventsRect.top - cellRect.top
+
+        console.log(`📍 주차${weekIndex} 일${dayIndex}: 실제 date-events 위치 = ${relativeTop}px`)
+
+        return relativeTop
+      } catch (error) {
+        console.warn('DOM 위치 계산 실패:', error)
+        // 실패시 기본값
+        return window.innerWidth <= 768 ? 54 : 66
+      }
+    },
+
+    /**
+     * 이벤트 스타일 가져오기 - 주차별 상대 위치 계산
      */
     getDuckHuEventStyle(event) {
       // 셀 너비 계산 - 실시간으로 정확한 값 사용
@@ -1053,11 +1125,34 @@ export default {
       const left = event.startDayIndex * cellWidth
       const width = (event.endDayIndex - event.startDayIndex + 1) * cellWidth
 
-      // top 값을 행별로 정확히 계산 - 각 행마다 (높이 + 간격)만큼 아래로
-      const baseTop = window.innerWidth <= 768 ? 22 : 40; // 모바일: 22px, PC: 40px
-      const top = baseTop + (event.rowIndex * (eventHeight + eventMargin))
+      // ✅ 수정: 동적으로 baseTop 계산 (getDateEventsTopPosition 로직을 직접 구현)
+      let baseTop = 0
 
-      //console.log(`🎨 ${event.schedule.title}: 행${event.rowIndex}, top=${top}px`)
+      // 1. 주차 표시 높이 (있을 경우에만)
+      const weekIndex = event.weekIndex || 0
+      const hasWeekIndicator = this.getWeekNumberOfMonth && this.getWeekNumberOfMonth(weekIndex) > 0
+      if (hasWeekIndicator) {
+        baseTop += window.innerWidth <= 768 ? 12 : 16 // 주차 표시 높이
+      }
+
+      // 2. 날짜 숫자 영역 높이 (고정)
+      baseTop += window.innerWidth <= 768 ? 18 : 24 // 날짜 숫자 높이
+
+      // 3. 공휴일 정보 높이 (있을 경우 추가)
+      if (this.duckHuCalendarWeeks && this.duckHuCalendarWeeks[weekIndex]) {
+        const week = this.duckHuCalendarWeeks[weekIndex]
+        const hasHolidays = week.some(day =>
+          this.holidaysByDate && this.holidaysByDate[day.fullDate] && this.holidaysByDate[day.fullDate].length > 0
+        )
+        if (hasHolidays) {
+          baseTop += window.innerWidth <= 768 ? 14 : 16 // 공휴일 표시 높이
+        }
+      }
+
+      // 4. 기본 여백
+      baseTop += window.innerWidth <= 768 ? 4 : 6
+
+      const top = baseTop + (event.rowIndex * (eventHeight + eventMargin))
 
       // 무지개 색상 배경 설정
       const backgroundColor = event.isRainbow
@@ -1620,9 +1715,10 @@ export default {
 }
 
 .week-events-container {
-  position: relative;
+  position: absolute;
   pointer-events: none;
-  padding-top: 51px;
+  /* JavaScript에서 정확한 크기 설정됨 */
+  overflow: hidden; /* 넘치는 부분 숨김 */
 }
 
 .week-events-container .event-item {
@@ -1631,7 +1727,6 @@ export default {
 
 .events-week {
   position: relative;
-  height: 120px; /* PC 기본 높이 */
   width: 100%;
 }
 
@@ -1811,10 +1906,6 @@ export default {
     gap: 4px;
   }
 
-  .week-events-container {
-    padding-top: 0;
-  }
-
   /* 모바일 헤더 표시 */
   .mobile-header {
     display: block;
@@ -1863,12 +1954,12 @@ export default {
   /* 모바일에서 주간 행 간격 조정 */
   .week-row {
     border-bottom: 1px solid #e9ecef;
-    min-height: 70px;
+    min-height: 90px;
   }
 
   /* 날짜 셀 모바일 최적화 */
   .date-cell {
-    height: 70px !important;
+    height: 90px !important;
     padding: 6px !important;
   }
 
@@ -1938,11 +2029,6 @@ export default {
     margin-top: 0;
   }
 
-  /* events-week 높이를 모바일 date-cell과 맞춤 */
-  .events-week {
-    height: 60px !important;
-  }
-
   /* 모바일 이벤트 아이템 크기 */
   .mobile-event {
     font-size: 8px !important;
@@ -2008,8 +2094,12 @@ export default {
 /* 초소형 모바일 (480px 이하) */
 @media (max-width: 480px) {
   .date-cell {
-    height: 60px !important;
+    height: 75px !important;
     padding: 4px !important;
+  }
+
+  .week-row {
+    min-height: 75px;
   }
 
   .week-indicator {
