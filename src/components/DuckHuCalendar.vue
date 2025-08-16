@@ -1127,32 +1127,35 @@ export default {
       const left = event.startDayIndex * cellWidth
       const width = (event.endDayIndex - event.startDayIndex + 1) * cellWidth
 
-      // ✅ 핵심 수정: getDateEventsTopPosition과 동일한 로직으로 baseTop 계산
-      const weekIndex = event.weekIndex || 0
+      // ✅ 수정: PC에서는 모든 주차에 동일한 기준점 사용
       let baseTop = 0
 
-      // 1. 주차 표시 높이 (있을 경우에만)
-      const hasWeekIndicator = this.getWeekNumberOfMonth(weekIndex) > 0
-      if (hasWeekIndicator) {
-        baseTop += window.innerWidth <= 768 ? 12 : 16 // 주차 표시 높이
+      if (window.innerWidth > 768) {
+        // PC 화면: 모든 주차에 일관된 기준점 사용
+        // 1. 주차 표시 최대 높이 (모든 주차에 동일하게 적용)
+        baseTop += 16 // 주차 표시 높이
+
+        // 2. 날짜 숫자 영역 높이 (고정)
+        // 날짜 숫자 높이
+
+        // 3. 공휴일 정보 최대 높이 (모든 주차에 동일하게 적용)
+        baseTop += 16 // 공휴일 표시 높이
+
+        // 4. 기본 여백
+        baseTop += 4
+      } else {
+        // ✅ 모바일도 모든 주차에 일관된 기준점 사용
+        // 1. 주차 표시 최대 높이 (모든 주차에 동일하게 적용)
+        baseTop += 12 // 주차 표시 높이 (있든 없든 항상 공간 확보)
+
+        // 2. 날짜 숫자 영역 높이는 date-header가 이미 차지하므로 추가 안함
+
+        // 3. 공휴일 정보 최대 높이 (모든 주차에 동일하게 적용)
+        baseTop += 14 // 공휴일 표시 높이 (있든 없든 항상 공간 확보)
+
+        // 4. 기본 여백
+        baseTop += 2
       }
-
-      // 2. 날짜 숫자 영역 높이 (고정)
-      baseTop += window.innerWidth <= 768 ? 18 : 24 // 날짜 숫자 높이
-
-      // 3. 공휴일 정보 높이 (있을 경우 추가)
-      const week = this.duckHuCalendarWeeks[weekIndex]
-      if (week) {
-        const hasHolidays = week.some(day =>
-          this.holidaysByDate[day.fullDate] && this.holidaysByDate[day.fullDate].length > 0
-        )
-        if (hasHolidays) {
-          baseTop += window.innerWidth <= 768 ? 14 : 16 // 공휴일 표시 높이
-        }
-      }
-
-      // 4. 기본 여백
-      baseTop += window.innerWidth <= 768 ? 4 : 6
 
       const top = baseTop + (event.rowIndex * (eventHeight + eventMargin))
 
@@ -2096,7 +2099,6 @@ export default {
 /* 초소형 모바일 (480px 이하) */
 @media (max-width: 480px) {
   .date-cell {
-    height: 75px !important;
     padding: 4px !important;
   }
 
