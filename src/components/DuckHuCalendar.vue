@@ -496,7 +496,6 @@ export default {
         if (container) {
           const containerWidth = container.clientWidth
           this.DUCKHU_CELL_WIDTH = containerWidth / 7
-          console.log(`📐 셀 너비 업데이트: ${this.DUCKHU_CELL_WIDTH}px`)
         }
       })
     },
@@ -521,8 +520,6 @@ export default {
 
         const startDateStr = this.formatDuckHuDate(calendarStart)
         const endDateStr = this.formatDuckHuDate(calendarEnd)
-
-        console.log('공휴일 데이터 로드 범위:', startDateStr, '~', endDateStr)
 
         const response = await holidayAPI.getHolidaysByDateRange(startDateStr, endDateStr)
 
@@ -611,8 +608,6 @@ export default {
 
         const startDateStr = this.formatDuckHuDate(calendarStart)
         const endDateStr = this.formatDuckHuDate(calendarEnd)
-
-        console.log('DuckHu 캘린더 날짜 범위:', startDateStr, '~', endDateStr)
 
         const response = await scheduleAPI.getSchedulesByDateRange({
           startDate: startDateStr,
@@ -840,17 +835,6 @@ export default {
     updateEventCache() {
       this.cachedWeekEvents = this.calculateAllWeekEvents()
       console.log('🎯 이벤트 캐시 업데이트 완료')
-
-      // 디버깅: 각 주차별 이벤트 개수 출력
-      Object.keys(this.cachedWeekEvents).forEach(weekIndex => {
-        const events = this.cachedWeekEvents[weekIndex]
-        if (events.length > 0) {
-          console.log(`  📅 Week ${weekIndex}: ${events.length}개 이벤트`)
-          events.forEach(event => {
-            console.log(`    - ${event.schedule.title}: 행${event.rowIndex}, 열${event.startDayIndex}-${event.endDayIndex}`)
-          })
-        }
-      })
     },
 
     /**
@@ -913,7 +897,6 @@ export default {
             })
 
             globalRowAssignments.set(schedule.id, assignedRow)
-            console.log(`🌍 전역 행 할당: ${schedule.title} -> 행 ${assignedRow}`)
             break
           }
 
@@ -977,8 +960,6 @@ export default {
             eventCount: overlappingCount,
             key: `${schedule.id}-week${weekIndex}-row${assignedRow}`
           })
-
-          console.log(`📅 주차 ${weekIndex}: ${schedule.title} -> 행 ${assignedRow}`)
         }
       })
 
@@ -1015,7 +996,6 @@ export default {
         })
 
         if (!hasConflict) {
-          console.log(`✅ 행 ${row} 사용 가능: ${startDay}-${endDay}`)
           return row
         } else {
           console.log(`❌ 행 ${row} 겹침: ${startDay}-${endDay}`)
@@ -1059,8 +1039,6 @@ export default {
       const borderOffset = weekIndex * 1 // 각 week-row마다 border-bottom 1px씩 누적
       const top = (weekIndex * cellHeight) + borderOffset
 
-      console.log(`🔍 주차 ${weekIndex}: cellHeight=${cellHeight}px, borderOffset=${borderOffset}px, top=${top}px`)
-
       return {
         position: 'absolute',
         top: `${top}px`,
@@ -1094,8 +1072,6 @@ export default {
 
         const relativeTop = eventsRect.top - cellRect.top
 
-        console.log(`📍 주차${weekIndex} 일${dayIndex}: 실제 date-events 위치 = ${relativeTop}px`)
-
         return relativeTop
       } catch (error) {
         console.warn('DOM 위치 계산 실패:', error)
@@ -1120,8 +1096,11 @@ export default {
         }
       }
 
-      const eventHeight = window.innerWidth <= 768 ? 16 : 20; // 반응형 높이
-      const eventMargin = window.innerWidth <= 768 ? 1 : 2;   // 반응형 간격
+      // 480px 이하에서 다른 이벤트 높이와 간격 사용
+      const eventHeight = window.innerWidth <= 480 ? 14 :
+                        window.innerWidth <= 768 ? 16 : 20;
+      const eventMargin = window.innerWidth <= 480 ? 1 :
+                        window.innerWidth <= 768 ? 1 : 2;
 
       // 이벤트의 위치와 크기 계산
       const left = event.startDayIndex * cellWidth
@@ -1132,29 +1111,21 @@ export default {
 
       if (window.innerWidth > 768) {
         // PC 화면: 모든 주차에 일관된 기준점 사용
-        // 1. 주차 표시 최대 높이 (모든 주차에 동일하게 적용)
         baseTop += 16 // 주차 표시 높이
-
-        // 2. 날짜 숫자 영역 높이 (고정)
-        // 날짜 숫자 높이
-
-        // 3. 공휴일 정보 최대 높이 (모든 주차에 동일하게 적용)
         baseTop += 16 // 공휴일 표시 높이
+        baseTop += 4  // 기본 여백
 
-        // 4. 기본 여백
-        baseTop += 4
+      } else if (window.innerWidth > 480) {
+        // 태블릿/모바일 (481-768px)
+        baseTop += 12 // 주차 표시 높이
+        baseTop += 14 // 공휴일 표시 높이
+        baseTop += 2  // 기본 여백
+
       } else {
-        // ✅ 모바일도 모든 주차에 일관된 기준점 사용
-        // 1. 주차 표시 최대 높이 (모든 주차에 동일하게 적용)
-        baseTop += 12 // 주차 표시 높이 (있든 없든 항상 공간 확보)
-
-        // 2. 날짜 숫자 영역 높이는 date-header가 이미 차지하므로 추가 안함
-
-        // 3. 공휴일 정보 최대 높이 (모든 주차에 동일하게 적용)
-        baseTop += 14 // 공휴일 표시 높이 (있든 없든 항상 공간 확보)
-
-        // 4. 기본 여백
-        baseTop += 2
+        // ✅ 초소형 모바일 (480px 이하) - 더 작은 값 사용
+        baseTop += 8  // 주차 표시 높이 (작게)
+        baseTop += 10 // 공휴일 표시 높이 (작게)
+        baseTop += 1  // 기본 여백 (최소화)
       }
 
       const top = baseTop + (event.rowIndex * (eventHeight + eventMargin))
@@ -1282,8 +1253,6 @@ export default {
       const baseMarginTop = window.innerWidth <= 768 ? 8 : 12
       const marginTop = baseMarginTop + longEventsTotalHeight
 
-      //console.log(`📐 일자 ${date}: 장기일정=${longEventCount}개, 여백=${marginTop}px`)
-
       return {
         marginTop: `${marginTop}px`,
         position: 'relative',
@@ -1312,8 +1281,6 @@ export default {
       }).length
 
       const totalCount = longEventCount + singleDayEventCount
-
-      //console.log(`📊 주차 ${weekIndex}: 장기=${longEventCount}, 단일=${singleDayEventCount}, 총=${totalCount}`)
 
       return totalCount
     }
@@ -2099,6 +2066,7 @@ export default {
 /* 초소형 모바일 (480px 이하) */
 @media (max-width: 480px) {
   .date-cell {
+    height: 75px !important;
     padding: 4px !important;
   }
 
