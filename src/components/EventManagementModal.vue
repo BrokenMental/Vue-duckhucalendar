@@ -340,9 +340,21 @@ export default {
       this.isSubmitting = true
 
       try {
+        // 시간 데이터 형식 처리
+        const formatTime = (time) => {
+          if (!time) return null
+          // HH:mm 형식 보장
+          if (time.length === 5) {
+            return time + ':00'  // HH:mm:ss 형식으로 변환
+          }
+          return time
+        }
+
         // 빈 배열 요소 제거
         const cleanedForm = {
           ...this.form,
+          startTime: formatTime(this.form.startTime),
+          endTime: formatTime(this.form.endTime),
           images: this.form.images.filter(img => img.trim()),
           links: this.form.links.filter(link => link.trim()),
           linkTitles: this.form.linkTitles.filter(title => title.trim())

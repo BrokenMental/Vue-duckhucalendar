@@ -64,7 +64,7 @@
       <div class="tab-content">
         <!-- 대시보드 탭 -->
         <div v-if="activeTab === 'dashboard'" class="dashboard-panel">
-          <!-- 통계 카드들을 한 줄로 표시 (개선됨) -->
+          <!-- 통계 카드들을 한 줄로 표시 -->
           <div class="stats-row">
             <div class="stat-card">
               <div class="stat-header">
@@ -121,7 +121,7 @@
             </div>
           </div>
 
-          <!-- 대시보드 컨텐츠 영역 (개선됨) -->
+          <!-- 대시보드 컨텐츠 영역 -->
           <div class="dashboard-content">
             <!-- 최근 활동 -->
             <div class="activity-section">
@@ -196,44 +196,56 @@
               <thead>
                 <tr>
                   <th>제목</th>
-                  <th>날짜/시간</th>
+                  <th>시작 날짜/시간</th>
+                  <th>종료 날짜/시간</th>
                   <th>카테고리</th>
-                  <th>추천</th>
+                  <th>즐겨찾기</th>
                   <th>작업</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="event in events" :key="event.id">
                   <td>{{ event.title }}</td>
+
+                  <!-- ✅ 시작 날짜/시간 -->
                   <td>
                     <div class="date-time-info">
-                      <!-- 시작 날짜 -->
-                      <div class="date-row">
-                        <strong>시작:</strong> {{ formatDate(event.startDate) }}
-                        <div v-if="event.startTime" class="time-info">{{ event.startTime }}</div>
-                      </div>
-                      <!-- 종료 날짜 (있는 경우만) -->
-                      <div v-if="event.endDate && event.endDate !== event.startDate" class="date-row">
-                        <strong>종료:</strong> {{ formatDate(event.endDate) }}
-                        <div v-if="event.endTime" class="time-info">{{ event.endTime }}</div>
+                      <div>{{ formatDate(event.startDate) }}</div>
+                      <div v-if="event.startTime" class="time-info">
+                        {{ event.startTime }}
                       </div>
                     </div>
                   </td>
+
+                  <!-- ✅ 종료 날짜/시간 -->
+                  <td>
+                    <div class="date-time-info">
+                      <div>{{ formatDate(event.endDate) }}</div>
+                      <div v-if="event.endTime" class="time-info">
+                        {{ event.endTime }}
+                      </div>
+                    </div>
+                  </td>
+
                   <td>
                     <span class="category-badge">{{ event.category }}</span>
                   </td>
+
                   <td class="text-center">
                     <button @click="toggleFeatured(event)" class="star-btn">
                       {{ event.isFeatured ? '⭐' : '☆' }}
                     </button>
                   </td>
-                  <td class="actions">
-                    <button @click="editEvent(event)" class="btn btn-primary btn-small">
-                      수정
-                    </button>
-                    <button @click="deleteEvent(event)" class="btn btn-danger btn-small">
-                      삭제
-                    </button>
+
+                  <td>
+                    <div class="action-buttons">
+                      <button @click="editEvent(event)" class="btn btn-sm btn-primary">
+                        수정
+                      </button>
+                      <button @click="deleteEvent(event)" class="btn btn-sm btn-danger">
+                        삭제
+                      </button>
+                    </div>
                   </td>
                 </tr>
               </tbody>
@@ -633,7 +645,14 @@
         <div v-if="activeTab === 'subscribers'" class="content-panel">
           <div class="content-header">
             <h2>구독자 관리</h2>
-            <p class="subscriber-count">총 {{ subscribers.length }}명이 구독 중입니다.</p>
+            <div class="subscriber-stats">
+              <span class="stat-item">
+                전체 구독자: <strong>{{ subscribers.length }}명</strong>
+              </span>
+              <span class="stat-item">
+                활성 구독자: <strong>{{ subscribers.filter(s => s.isActive).length }}명</strong>
+              </span>
+            </div>
           </div>
 
           <div class="subscribers-table">
@@ -863,13 +882,15 @@ export default {
         { id: 'settings', label: '설정' }
       ],
 
-      // 통계 데이터 (개선됨)
+      // 통계 데이터
       stats: {
         totalSchedules: 0,
         featuredSchedules: 0,
         todaySchedules: 0,
-        totalVisitors: 0,      // 새로 추가
-        todayVisitors: 0       // 새로 추가
+        totalSubscribers: 0,
+        activeSubscribers: 0,
+        totalVisitors: 0,
+        todayVisitors: 0
       },
 
       // 데이터
@@ -1025,6 +1046,7 @@ export default {
 
     // 대시보드 데이터 로드
     async loadDashboardData() {
+      this.isLoading = true
       // 각 API를 개별적으로 처리하여 일부 실패해도 계속 진행
 
       // 이벤트 데이터 로드
@@ -1240,7 +1262,7 @@ export default {
     async deleteEvent(event) {
       if (confirm(`"${event.title}" 이벤트를 정말로 삭제하시겠습니까?`)) {
         try {
-          await scheduleAPI.deleteEvent(event.id)
+          await scheduleAPI.deleteSchedule(event.id)
           await this.loadDashboardData()
           alert('이벤트가 삭제되었습니다.')
         } catch (error) {
@@ -1249,12 +1271,15 @@ export default {
       }
     },
 
-    async toggleEventFeatured(event) {
+    async toggleFeatured(event) {
       try {
-        await scheduleAPI.updateEvent(event.id, { isFeatured: !event.isFeatured })
+        await scheduleAPI.updateSchedule(event.id, {
+          ...event,
+          isFeatured: !event.isFeatured
+        })
         await this.loadDashboardData()
       } catch (error) {
-        alert('추천 상태 변경에 실패했습니다: ' + error.message)
+        alert('즐겨찾기 설정 변경에 실패했습니다: ' + error.message)
       }
     },
 
@@ -2451,7 +2476,6 @@ export default {
   font-size: 16px;
 }
 
-/* ===== 버튼 크기 수정 ===== */
 .btn-small {
   padding: 6px 12px;
   font-size: 12px;
