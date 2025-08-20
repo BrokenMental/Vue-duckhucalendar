@@ -474,7 +474,92 @@
           </div>
         </div>
 
-        <!-- 설정 탭 - 완성된 버전 -->
+        <!-- 구독자 관리 탭 -->
+        <div v-if="activeTab === 'subscribers'" class="content-panel">
+          <div class="content-header">
+            <h2>구독자 관리</h2>
+            <div class="subscriber-stats">
+              <span class="stat-item">
+                전체 구독자: <strong>{{ subscribers.length }}명</strong>
+              </span>
+              <span class="stat-item">
+                활성 구독자: <strong>{{ subscribers.filter(s => s.isActive).length }}명</strong>
+              </span>
+            </div>
+          </div>
+
+          <div class="subscribers-table">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>이메일</th>
+                  <th>구독일</th>
+                  <th>상태</th>
+                  <th>작업</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="subscriber in paginatedSubscribers" :key="subscriber.id">
+                  <td>{{ subscriber.id }}</td>
+                  <td>{{ subscriber.email }}</td>
+                  <td>{{ subscriber.subscriberName || '-' }}</td>
+                  <td>
+                    <span class="status-badge" :class="subscriber.isActive ? 'active' : 'inactive'">
+                      {{ subscriber.isActive ? '활성' : '비활성' }}
+                    </span>
+                  </td>
+                  <td>{{ formatDate(subscriber.subscribedAt) }}</td>
+                  <td>
+                    <!-- 액션 버튼 추가 -->
+                    <div class="action-buttons">
+                      <button
+                        v-if="subscriber.isActive"
+                        class="btn-action btn-secondary"
+                        @click="toggleSubscriberStatus(subscriber.id, false)"
+                        title="구독 비활성화">
+                        ⏸️
+                      </button>
+                      <button
+                        v-else
+                        class="btn-action btn-success"
+                        @click="toggleSubscriberStatus(subscriber.id, true)"
+                        title="구독 활성화">
+                        ▶️
+                      </button>
+                      <button
+                        class="btn-action btn-danger"
+                        @click="confirmDeleteSubscriber(subscriber.id, subscriber.email)"
+                        title="구독자 삭제">
+                        🗑️
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-if="totalSubscriberPages > 1" class="pagination">
+              <button
+                @click="subscriberPage = Math.max(1, subscriberPage - 1)"
+                :disabled="subscriberPage === 1"
+                class="btn btn-secondary">
+                이전
+              </button>
+
+              <span class="page-info">
+                {{ subscriberPage }} / {{ totalSubscriberPages }}
+              </span>
+
+              <button
+                @click="subscriberPage = Math.min(totalSubscriberPages, subscriberPage + 1)"
+                :disabled="subscriberPage === totalSubscriberPages"
+                class="btn btn-secondary">
+                다음
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 설정 탭 -->
         <div v-if="activeTab === 'settings'" class="settings-panel">
           <div class="settings-grid">
             <!-- 일반 설정 -->
@@ -637,225 +722,6 @@
                   <span class="stat-value">{{ pendingRequests }}</span>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 구독자 관리 탭 -->
-        <div v-if="activeTab === 'subscribers'" class="content-panel">
-          <div class="content-header">
-            <h2>구독자 관리</h2>
-            <div class="subscriber-stats">
-              <span class="stat-item">
-                전체 구독자: <strong>{{ subscribers.length }}명</strong>
-              </span>
-              <span class="stat-item">
-                활성 구독자: <strong>{{ subscribers.filter(s => s.isActive).length }}명</strong>
-              </span>
-            </div>
-          </div>
-
-          <div class="subscribers-table">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>이메일</th>
-                  <th>구독일</th>
-                  <th>상태</th>
-                  <th>작업</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="subscriber in paginatedSubscribers" :key="subscriber.id">
-                  <td>{{ subscriber.id }}</td>
-                  <td>{{ subscriber.email }}</td>
-                  <td>{{ subscriber.subscriberName || '-' }}</td>
-                  <td>
-                    <span class="status-badge" :class="subscriber.isActive ? 'active' : 'inactive'">
-                      {{ subscriber.isActive ? '활성' : '비활성' }}
-                    </span>
-                  </td>
-                  <td>{{ formatDate(subscriber.subscribedAt) }}</td>
-                  <td>
-                    <!-- 액션 버튼 추가 -->
-                    <div class="action-buttons">
-                      <button
-                        v-if="subscriber.isActive"
-                        class="btn-action btn-secondary"
-                        @click="toggleSubscriberStatus(subscriber.id, false)"
-                        title="구독 비활성화">
-                        ⏸️
-                      </button>
-                      <button
-                        v-else
-                        class="btn-action btn-success"
-                        @click="toggleSubscriberStatus(subscriber.id, true)"
-                        title="구독 활성화">
-                        ▶️
-                      </button>
-                      <button
-                        class="btn-action btn-danger"
-                        @click="confirmDeleteSubscriber(subscriber.id, subscriber.email)"
-                        title="구독자 삭제">
-                        🗑️
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <div v-if="totalSubscriberPages > 1" class="pagination">
-              <button
-                @click="subscriberPage = Math.max(1, subscriberPage - 1)"
-                :disabled="subscriberPage === 1"
-                class="btn btn-secondary">
-                이전
-              </button>
-
-              <span class="page-info">
-                {{ subscriberPage }} / {{ totalSubscriberPages }}
-              </span>
-
-              <button
-                @click="subscriberPage = Math.min(totalSubscriberPages, subscriberPage + 1)"
-                :disabled="subscriberPage === totalSubscriberPages"
-                class="btn btn-secondary">
-                다음
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 설정 탭 -->
-        <div v-if="activeTab === 'settings'" class="settings-panel">
-          <div class="settings-grid">
-            <!-- 일반 설정 -->
-            <div class="setting-card">
-              <h3>일반 설정</h3>
-
-              <div class="setting-item">
-                <label>사이트 제목</label>
-                <input v-model="settings.siteTitle" type="text" />
-              </div>
-
-              <div class="setting-item">
-                <label>사이트 설명</label>
-                <textarea v-model="settings.siteDescription"></textarea>
-              </div>
-
-              <div class="setting-item">
-                <label class="checkbox-label">
-                  <input v-model="settings.maintenanceMode" type="checkbox" />
-                  유지보수 모드
-                </label>
-              </div>
-
-              <button @click="saveGeneralSettings" class="btn btn-primary">
-                저장
-              </button>
-            </div>
-
-            <!-- 알림 설정 -->
-            <div class="setting-card">
-              <h3>뉴스레터 설정</h3>
-
-              <div class="setting-item">
-                <label class="checkbox-label">
-                  <input v-model="settings.newsletterEnabled" type="checkbox" />
-                  뉴스레터 발송 활성화
-                </label>
-              </div>
-
-              <div class="setting-item">
-                <label>발송 요일</label>
-                <select v-model="settings.newsletterDay">
-                  <option value="0">일요일</option>
-                  <option value="1">월요일</option>
-                  <option value="2">화요일</option>
-                  <option value="3">수요일</option>
-                  <option value="4">목요일</option>
-                  <option value="5">금요일</option>
-                  <option value="6">토요일</option>
-                </select>
-              </div>
-
-              <div class="setting-item">
-                <label>발송 시간</label>
-                <input v-model="settings.newsletterTime" type="time" />
-              </div>
-
-              <button @click="saveNotificationSettings" class="btn btn-primary">
-                저장
-              </button>
-            </div>
-
-            <!-- 캘린더 설정 -->
-            <div class="setting-card">
-              <h3>캘린더 설정</h3>
-
-              <div class="setting-item">
-                <label>주 시작일</label>
-                <select v-model="settings.weekStartDay">
-                  <option value="0">일요일</option>
-                  <option value="1">월요일</option>
-                </select>
-              </div>
-
-              <div class="setting-item">
-                <label>기본 보기</label>
-                <select v-model="settings.defaultView">
-                  <option value="month">월간</option>
-                  <option value="week">주간</option>
-                  <option value="day">일간</option>
-                </select>
-              </div>
-
-              <div class="setting-item">
-                <label>페이지당 이벤트 수</label>
-                <input
-                  v-model.number="settings.eventsPerPage"
-                  type="number"
-                  min="10"
-                  max="100"
-                />
-              </div>
-
-              <div class="setting-item">
-                <label class="checkbox-label">
-                  <input v-model="settings.showWeekNumbers" type="checkbox" />
-                  주 번호 표시 (현재 미구현)
-                </label>
-              </div>
-
-              <button @click="saveCalendarSettings" class="btn btn-primary">
-                저장
-              </button>
-            </div>
-
-            <!-- 데이터 관리 설정 (관리자 전용) -->
-            <div class="setting-card">
-              <h3>데이터 관리</h3>
-
-              <div class="setting-item">
-                <label>데이터 백업</label>
-                <button @click="backupData" class="btn btn-outline">
-                  백업 생성
-                </button>
-              </div>
-
-              <div class="setting-item danger-zone">
-                <label>위험 구역</label>
-                <button @click="confirmDeleteAllEvents" class="btn btn-danger">
-                  모든 이벤트 삭제
-                </button>
-                <button @click="confirmDeleteAllSubscribers" class="btn btn-danger">
-                  모든 구독자 삭제
-                </button>
-              </div>
-
-              <p class="warning-text">
-                ⚠️ 삭제된 데이터는 복구할 수 없습니다.
-              </p>
             </div>
           </div>
         </div>
@@ -1126,66 +992,73 @@ export default {
 
     // 대시보드 데이터 로드
     async loadDashboardData() {
-      this.isLoading = true
-      // 각 API를 개별적으로 처리하여 일부 실패해도 계속 진행
+      this.loading = true
 
-      // 이벤트 데이터 로드
       try {
-        const eventsData = await scheduleAPI.getAllSchedules()
-        this.events = eventsData.schedules || eventsData || []
-      } catch (error) {
-        console.warn('이벤트 데이터 로드 실패:', error.message)
-        this.events = [] // 더미 데이터 제거, 빈 배열로 처리
-      }
+        // 토큰 확인
+        const token = sessionStorage.getItem('admin-token')
+        if (!token) {
+          console.warn('관리자 토큰이 없습니다. 로그인 페이지로 이동합니다.')
+          this.$router.push('/admin-login')
+          return
+        }
 
-      // 이벤트 요청 데이터 로드
-      try {
-        const requestsData = await eventRequestAPI.getEventRequests()
-        this.eventRequests = requestsData.requests || requestsData || []
-      } catch (error) {
-        console.warn('이벤트 요청 데이터 로드 실패:', error.message)
-        // 기존 더미 데이터 생성 부분 제거
-        this.eventRequests = [] // 빈 배열로 처리
-      }
+        // 병렬로 데이터 로드 (에러가 나도 계속 진행)
+        const [eventsRes, requestsRes, subscribersRes, noticesRes, activityRes, systemRes] =
+          await Promise.allSettled([
+            scheduleAPI.getAllSchedules(),
+            eventRequestAPI.getEventRequests().catch(err => {
+              console.warn('이벤트 요청 로드 실패 (정상):', err.message)
+              return { requests: [] }
+            }),
+            emailSubscriptionAPI.getActiveSubscribers().catch(err => {
+              console.warn('구독자 로드 실패 (정상):', err.message)
+              return { subscribers: [] }
+            }),
+            noticeAPI.getAllNotices(),
+            scheduleAPI.getRecentActivity(10).catch(err => {
+              console.warn('최근 활동 로드 실패 (정상):', err.message)
+              return { activities: [] }
+            }),
+            adminAPI.getSystemActivity(10).catch(err => {
+              console.warn('시스템 활동 로드 실패 (정상):', err.message)
+              return { activities: [] }
+            })
+          ])
 
-      // 구독자 데이터 로드
-      try {
-        const subscribersData = await emailSubscriptionAPI.getActiveSubscribers()
-        this.subscribers = subscribersData.subscribers || subscribersData || []
-        console.log('✅ 구독자 데이터 로드 성공:', this.subscribers.length, '명')
-      } catch (error) {
-        console.error('❌ 구독자 데이터 로드 실패:', error.message)
-        this.subscribers = [] // 빈 배열로 처리
-      }
+        // 결과 처리
+        if (eventsRes.status === 'fulfilled') {
+          this.events = eventsRes.value.schedules || eventsRes.value || []
+        }
 
-      // 공지사항 데이터 로드
-      try {
-        const noticesData = await noticeAPI.getAllNotices()
-        this.notices = noticesData.notices || noticesData || []
-      } catch (error) {
-        console.warn('공지사항 데이터 로드 실패:', error.message)
-        this.notices = [] // 빈 배열로 처리
-      }
+        if (requestsRes.status === 'fulfilled') {
+          this.eventRequests = requestsRes.value.requests || requestsRes.value || []
+        }
 
-      // 최근 활동 데이터 로드
-      try {
-        const activityData = await scheduleAPI.getRecentActivity()
-        this.recentActivity = activityData.activities || activityData || []
-      } catch (error) {
-        console.warn('최근 활동 데이터 로드 실패:', error.message)
-        this.recentActivity = [] // 빈 배열로 처리
-      }
+        if (subscribersRes.status === 'fulfilled') {
+          const data = subscribersRes.value
+          this.subscribers = data.subscribers || data || []
+        }
 
-      // 시스템 활동 데이터 로드
-      try {
-        const systemData = await adminAPI.getSystemActivity()
-        this.systemActivity = systemData.activities || systemData || []
-      } catch (error) {
-        console.warn('시스템 활동 데이터 로드 실패:', error.message)
-        this.systemActivity = [] // 빈 배열로 처리
-      }
+        if (noticesRes.status === 'fulfilled') {
+          this.notices = noticesRes.value.notices || noticesRes.value || []
+        }
 
-      console.log('✅ 대시보드 데이터 로드 완료 (일부 실패한 항목은 빈 상태로 표시)')
+        if (activityRes.status === 'fulfilled') {
+          this.recentActivity = activityRes.value.activities || activityRes.value || []
+        }
+
+        if (systemRes.status === 'fulfilled') {
+          this.systemActivity = systemRes.value.activities || systemRes.value || []
+        }
+
+        console.log('✅ 대시보드 데이터 로드 완료')
+
+      } catch (error) {
+        console.error('대시보드 로드 중 오류:', error)
+      } finally {
+        this.loading = false
+      }
     },
 
     calculateStats() {

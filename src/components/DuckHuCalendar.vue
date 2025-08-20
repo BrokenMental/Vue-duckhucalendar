@@ -68,13 +68,16 @@
               v-for="(day, dayIndex) in week"
               :key="day.fullDate"
               class="date-cell"
+              :data-date="day.fullDate"
               :class="{
                 'today': isDuckHuToday(new Date(day.fullDate + 'T00:00:00')),
                 'other-month': day.isOtherMonth,
                 'current-month': day.isCurrentMonth,
                 'sunday': dayIndex === 0,
                 'saturday': dayIndex === 6,
-                'has-holiday': getHolidaysForDay(day.fullDate).length > 0
+                'has-holiday': getHolidaysForDay(day.fullDate).length > 0,
+                'highlighted': day.fullDate === highlightedDate,
+                'blink-animation': day.fullDate === highlightedDate && highlightAnimation
               }"
               @click="handleDateCellClick(day)"
             >
@@ -289,7 +292,11 @@ export default {
       resizeHandler: null,
 
       // 주차별 이벤트 캐시
-      cachedWeekEvents: null
+      cachedWeekEvents: null,
+
+      // 하이라이트 관련
+      highlightedDate: null,
+      highlightAnimation: false,
     }
   },
 
@@ -1283,6 +1290,36 @@ export default {
       const totalCount = longEventCount + singleDayEventCount
 
       return totalCount
+    },
+
+    /**
+     * 특정 날짜로 이동 및 하이라이트
+     */
+    goToDate(dateString) {
+      const targetDate = new Date(dateString + 'T00:00:00')
+
+      // 해당 월로 이동
+      this.selectedYear = targetDate.getFullYear()
+      this.selectedMonth = targetDate.getMonth()
+
+      // 캘린더 다시 생성
+      this.$nextTick(() => {
+        // 날짜 하이라이트
+        this.highlightedDate = dateString
+        this.highlightAnimation = true
+
+        // 해당 날짜로 스크롤
+        const dateElement = document.querySelector(`[data-date="${dateString}"]`)
+        if (dateElement) {
+          dateElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+
+        // 3초 후 하이라이트 제거
+        setTimeout(() => {
+          this.highlightedDate = null
+          this.highlightAnimation = false
+        }, 3000)
+      })
     }
   }
 }
@@ -1856,6 +1893,31 @@ export default {
 .tooltip-date, .tooltip-time {
   font-size: 11px;
   opacity: 0.9;
+}
+
+/* 하이라이트 애니메이션 */
+.date-cell.highlighted {
+  background: #fff3cd !important;
+  border: 2px solid #ffc107 !important;
+  box-shadow: 0 0 15px rgba(255, 193, 7, 0.4);
+  z-index: 10;
+}
+
+.date-cell.blink-animation {
+  animation: blinkEffect 0.5s ease-in-out 6;
+}
+
+@keyframes blinkEffect {
+  0%, 100% {
+    background: #fff3cd;
+    transform: scale(1);
+    box-shadow: 0 0 15px rgba(255, 193, 7, 0.4);
+  }
+  50% {
+    background: #ffe69c;
+    transform: scale(1.03);
+    box-shadow: 0 0 25px rgba(255, 193, 7, 0.6);
+  }
 }
 
 /* 모바일 반응형 디자인 수정 */

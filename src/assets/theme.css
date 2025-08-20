@@ -1,65 +1,211 @@
-/* 테마 관련 전역 스타일 */
+/* CSS 변수 정의 */
+:root {
+  --transition-speed: 0.3s;
+}
 
-/* 라이트 테마 */
+/* 라이트 테마 (기본) */
 .theme-light {
   --bg-primary: #ffffff;
   --bg-secondary: #f5f5f5;
+  --bg-calendar: #ffffff;
   --text-primary: #333333;
   --text-secondary: #666666;
   --border-color: #e0e0e0;
   --shadow-color: rgba(0, 0, 0, 0.1);
+  --hover-bg: #f8f9fa;
+  --date-cell-bg: #ffffff;
+  --date-cell-hover: #f8f9fa;
+  --header-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
 /* 다크 테마 */
 .theme-dark {
   --bg-primary: #1a1a1a;
   --bg-secondary: #2d2d2d;
+  --bg-calendar: #242424;
   --text-primary: #ffffff;
   --text-secondary: #b0b0b0;
   --border-color: #404040;
   --shadow-color: rgba(255, 255, 255, 0.1);
-
-  background-color: var(--bg-primary) !important;
-  color: var(--text-primary) !important;
+  --hover-bg: #3a3a3a;
+  --date-cell-bg: #2d2d2d;
+  --date-cell-hover: #3a3a3a;
+  --header-bg: linear-gradient(135deg, #434343 0%, #2a2a2a 100%);
 }
 
-.theme-dark .calendar-section,
-.theme-dark .sidebar-card,
-.theme-dark .modal-content,
-.theme-dark .settings-card,
-.theme-dark .setting-group {
-  background-color: var(--bg-secondary) !important;
-  color: var(--text-primary) !important;
-  border-color: var(--border-color) !important;
+/* 유니크 테마 */
+.theme-unique {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f5;
+  --bg-calendar: rgba(255, 255, 255, 0.95);
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --border-color: #e0e0e0;
+  --shadow-color: rgba(102, 126, 234, 0.2);
+  --hover-bg: rgba(118, 75, 162, 0.1);
+  --date-cell-bg: rgba(255, 255, 255, 0.9);
+  --date-cell-hover: rgba(118, 75, 162, 0.15);
+  --header-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
-.theme-dark input,
-.theme-dark select,
-.theme-dark textarea {
-  background-color: var(--bg-primary) !important;
-  color: var(--text-primary) !important;
+/* 다크 테마 적용 */
+body.theme-dark {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* 메인 레이아웃 */
+.theme-dark .main-layout {
+  background: var(--bg-primary);
+}
+
+.theme-unique .main-layout {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+/* DuckHuCalendar 컴포넌트 테마 */
+.theme-dark .duckhu-calendar,
+.theme-dark .calendar-container {
+  background: var(--bg-calendar) !important;
+}
+
+.theme-dark .calendar-header {
+  background: var(--header-bg) !important;
+}
+
+.theme-dark .weekday-header {
+  background: var(--bg-secondary) !important;
+}
+
+.theme-dark .weekday-cell {
+  color: var(--text-secondary) !important;
   border-color: var(--border-color) !important;
 }
 
 .theme-dark .date-cell {
-  background-color: var(--bg-secondary) !important;
+  background: var(--date-cell-bg) !important;
   border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
 }
 
 .theme-dark .date-cell:hover {
-  background-color: #3a3a3a !important;
+  background: var(--date-cell-hover) !important;
 }
 
 .theme-dark .date-number {
   color: var(--text-primary) !important;
 }
 
-/* 유니크 테마 (현재 그라데이션 유지) */
-.theme-unique {
-  /* 기존 그라데이션 배경 유지 */
+/* 유니크 테마 특별 효과 */
+.theme-unique .duckhu-calendar {
+  background: var(--bg-calendar);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 20px 40px var(--shadow-color);
 }
 
-/* 테마 전환 애니메이션 */
+.theme-unique .date-cell {
+  background: var(--date-cell-bg);
+  backdrop-filter: blur(5px);
+}
+
+.theme-unique .date-cell:hover {
+  background: var(--date-cell-hover);
+  transform: scale(1.02);
+}
+
+/* 사이드바 테마 */
+.theme-dark .sidebar-card {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.theme-unique .sidebar-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px var(--shadow-color);
+}
+
+/* 모달 테마 */
+.theme-dark .modal-content,
+.theme-dark .notice-modal-content {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+.theme-dark .modal-header,
+.theme-dark .notice-modal-header {
+  background: var(--header-bg) !important;
+}
+
+/* 설정 페이지 테마 */
+.theme-dark .settings-page {
+  background: var(--bg-primary) !important;
+}
+
+.theme-dark .setting-group {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* 입력 요소 테마 */
+.theme-dark input,
+.theme-dark select,
+.theme-dark textarea {
+  background: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.theme-dark input:focus,
+.theme-dark select:focus,
+.theme-dark textarea:focus {
+  outline-color: #667eea !important;
+  border-color: #667eea !important;
+}
+
+/* 버튼 테마 */
+.theme-dark .btn {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.theme-dark .btn:hover {
+  background: var(--hover-bg);
+}
+
+.theme-dark .btn-primary {
+  background: #667eea;
+  color: white;
+  border: none;
+}
+
+/* 애니메이션 */
 * {
-  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+  transition: background-color var(--transition-speed) ease,
+              color var(--transition-speed) ease,
+              border-color var(--transition-speed) ease;
+}
+
+/* 날짜 하이라이트 애니메이션 */
+.date-cell.highlighted {
+  background: #fff3cd !important;
+  border: 2px solid #ffc107 !important;
+  box-shadow: 0 0 10px rgba(255, 193, 7, 0.5);
+}
+
+.blink-animation {
+  animation: blink 0.6s ease-in-out 5;
+}
+
+@keyframes blink {
+  0%, 100% {
+    background: #fff3cd;
+    transform: scale(1);
+  }
+  50% {
+    background: #ffe69c;
+    transform: scale(1.05);
+  }
 }

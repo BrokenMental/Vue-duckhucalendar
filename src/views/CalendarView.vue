@@ -4,7 +4,10 @@
     <div class="layout-container">
       <!-- 캘린더 섹션 (좌측~중앙) -->
       <div class="calendar-section">
-        <DuckHuCalendar />
+        <DuckHuCalendar
+          ref="calendar"
+          :events="schedules"
+          @refresh="loadMonthSchedules" />
       </div>
 
       <!-- 사이드바 섹션 (우측) -->
@@ -250,6 +253,9 @@ export default {
       loadingSidebar: false, // 사이드바 전용 로딩
       error: null,
 
+      // 캘린더 일정 데이터
+      schedules: [],
+
       // 공지사항 모달 관련
       showNoticeModal: false,
       selectedNotice: null,
@@ -262,6 +268,12 @@ export default {
 
   async mounted() {
     document.addEventListener('click', this.handleOutsideClick)
+
+    // 현재 월의 일정 로드
+    const now = new Date()
+    await this.loadMonthSchedules(now.getFullYear(), now.getMonth())
+
+    // 사이드바 데이터 로드
     await this.loadSidebarData()
   },
 
@@ -657,10 +669,39 @@ export default {
     },
 
     /**
-     * 사이드바 이벤트 클릭 처리
+     * 월별 일정 로드 (DuckHuCalendar 이벤트 핸들러)
+     */
+    async loadMonthSchedules(year, month) {
+      try {
+        console.log(`📅 ${year}년 ${month}월 일정 로드 요청`)
+
+        // scheduleAPI를 통해 월별 일정 조회
+        const response = await scheduleAPI.getSchedulesByMonth(year, month + 1) // month는 0부터 시작하므로 +1
+
+        // 응답 데이터 처리
+        if (response && response.schedules) {
+          this.schedules = response.schedules
+        } else if (Array.isArray(response)) {
+          this.schedules = response
+        } else {
+          this.schedules = []
+        }
+
+        console.log(`✅ ${this.schedules.length}개 일정 로드 완료`)
+      } catch (error) {
+        console.error('월별 일정 로드 실패:', error)
+        this.schedules = []
+      }
+    },
+
+    /**
+     * 사이드바 이벤트 클릭 시 캘린더로 이동
      */
     handleSidebarEventClick(event) {
-      this.goToEventDate(event)
+      // DuckHuCalendar의 goToDate 메서드 호출
+      if (this.$refs.calendar && this.$refs.calendar.goToDate) {
+        this.$refs.calendar.goToDate(event.startDate)
+      }
     },
   }
 }
