@@ -72,7 +72,10 @@
               </div>
               <!-- 정상 데이터 -->
               <div v-else-if="upcomingEvents.length > 0" class="event-list">
-                <div v-for="event in upcomingEvents" :key="event.id" class="event-item upcoming" @click="showEventDetail(event)">
+                <div class="event-item upcoming"
+                  v-for="event in upcomingEvents"
+                  :key="event.id"
+                  @click="handleSidebarEventClick(event)">
                   <div class="event-date">{{ formatEventDate(event) }}</div>
                   <div class="event-content">
                     <div class="event-title">{{ event.title }}</div>
@@ -100,7 +103,10 @@
               </div>
               <!-- 정상 데이터 -->
               <div v-else-if="recentEvents.length > 0" class="event-list">
-                <div v-for="event in recentEvents" :key="event.id" class="event-item recent" @click="showEventDetail(event)">
+                <div class="event-item recent"
+                  v-for="event in recentEvents"
+                  :key="event.id"
+                  @click="handleSidebarEventClick(event)">
                   <div class="event-content">
                     <div class="event-title">{{ event.title }}</div>
                     <div class="event-meta">
@@ -191,6 +197,33 @@
       </transition>
     </div>
   </div>
+
+  <!-- 공지사항 상세 모달 -->
+  <div v-if="showNoticeModal" class="notice-modal-overlay" @click.self="closeNoticeModal">
+    <div class="notice-modal-content">
+      <div class="notice-modal-header">
+        <h2>📢 공지사항</h2>
+        <button class="modal-close-btn" @click="closeNoticeModal">✕</button>
+      </div>
+
+      <div v-if="selectedNotice" class="notice-modal-body">
+        <h3 class="notice-title">{{ selectedNotice.title }}</h3>
+        <div class="notice-meta">
+          <span class="notice-date">작성일: {{ formatNoticeDate(selectedNotice) }}</span>
+          <span v-if="selectedNotice.priority" class="notice-priority">
+            중요도: {{ selectedNotice.priority }}
+          </span>
+        </div>
+        <div class="notice-content">
+          {{ selectedNotice.content || '내용이 없습니다.' }}
+        </div>
+      </div>
+
+      <div class="notice-modal-footer">
+        <button class="btn btn-primary" @click="closeNoticeModal">확인</button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script>
@@ -215,7 +248,15 @@ export default {
       notices: [], // 공지사항 추가
       loading: false,
       loadingSidebar: false, // 사이드바 전용 로딩
-      error: null
+      error: null,
+
+      // 공지사항 모달 관련
+      showNoticeModal: false,
+      selectedNotice: null,
+
+      // 이벤트 하이라이트 관련
+      highlightedDate: null,
+      highlightedEventId: null,
     }
   },
 
@@ -469,17 +510,6 @@ export default {
     },
 
     /**
-     * 공지사항 상세보기
-     */
-    showNoticeDetail(notice) {
-      // 간단한 알림으로 표시 (추후 모달로 개선 가능)
-      const content = notice.content || '내용이 없습니다.'
-      const message = `📢 ${notice.title}\n\n${content}\n\n작성일: ${this.formatNoticeDate(notice)}`
-
-      alert(message)
-    },
-
-    /**
      * 이벤트 상세보기
      */
     showEventDetail(event) {
@@ -573,7 +603,65 @@ export default {
      */
     async refreshData() {
       await this.loadSidebarData()
-    }
+    },
+
+    /**
+     * 공지사항 상세보기 모달
+     */
+    showNoticeDetail(notice) {
+      this.selectedNotice = notice
+      this.showNoticeModal = true
+    },
+
+    /**
+     * 공지사항 모달 닫기
+     */
+    closeNoticeModal() {
+      this.showNoticeModal = false
+      this.selectedNotice = null
+    },
+
+    /**
+     * 이벤트 클릭 시 해당 날짜로 이동
+     */
+    goToEventDate(event) {
+      // 날짜 파싱
+      const eventDate = new Date(event.startDate + 'T00:00:00')
+
+      // 해당 월로 이동
+      this.selectedYear = eventDate.getFullYear()
+      this.selectedMonth = eventDate.getMonth()
+
+      // 캘린더 다시 그리기
+      this.$nextTick(() => {
+        // 해당 날짜 하이라이트
+        this.highlightedDate = event.startDate
+        this.highlightedEventId = event.id
+
+        // 해당 날짜 요소로 스크롤
+        const dateElement = document.querySelector(`[data-date="${event.startDate}"]`)
+        if (dateElement) {
+          dateElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+          // 깜빡임 효과
+          dateElement.classList.add('blink-animation')
+
+          // 3초 후 깜빡임 제거
+          setTimeout(() => {
+            this.highlightedDate = null
+            this.highlightedEventId = null
+            dateElement.classList.remove('blink-animation')
+          }, 3000)
+        }
+      })
+    },
+
+    /**
+     * 사이드바 이벤트 클릭 처리
+     */
+    handleSidebarEventClick(event) {
+      this.goToEventDate(event)
+    },
   }
 }
 </script>
@@ -941,6 +1029,150 @@ export default {
 .dropdown-leave-to {
   opacity: 0;
   transform: translateY(10px) scale(0.9);
+}
+
+.notice-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.3s ease;
+}
+
+.notice-modal-content {
+  background: white;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s ease;
+}
+
+.notice-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.notice-modal-header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.modal-close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+}
+
+.notice-modal-body {
+  padding: 24px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.notice-title {
+  font-size: 24px;
+  margin: 0 0 16px 0;
+  color: #333;
+}
+
+.notice-meta {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.notice-date,
+.notice-priority {
+  font-size: 14px;
+  color: #666;
+}
+
+.notice-content {
+  font-size: 16px;
+  line-height: 1.6;
+  color: #333;
+  white-space: pre-wrap;
+}
+
+.notice-modal-footer {
+  padding: 16px 24px;
+  background: #f5f5f5;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* 날짜 하이라이트 및 깜빡임 애니메이션 */
+.date-cell.highlighted {
+  background: #fff3cd !important;
+  border: 2px solid #ffc107 !important;
+}
+
+.blink-animation {
+  animation: blink 0.6s ease-in-out 5;
+}
+
+@keyframes blink {
+  0%, 100% {
+    background: #fff3cd;
+    transform: scale(1);
+  }
+  50% {
+    background: #ffe69c;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* 사이드바 이벤트 아이템 커서 */
+.event-item {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.event-item:hover {
+  background: #e9ecef;
+  transform: translateX(4px);
 }
 
 /* 모바일 반응형 디자인 */

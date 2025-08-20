@@ -666,22 +666,63 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="subscriber in subscribers" :key="subscriber.id">
+                <tr v-for="subscriber in paginatedSubscribers" :key="subscriber.id">
+                  <td>{{ subscriber.id }}</td>
                   <td>{{ subscriber.email }}</td>
-                  <td>{{ formatDate(subscriber.subscribedAt) }}</td>
+                  <td>{{ subscriber.subscriberName || '-' }}</td>
                   <td>
-                    <span :class="['status-badge', subscriber.isActive ? 'active' : 'inactive']">
+                    <span class="status-badge" :class="subscriber.isActive ? 'active' : 'inactive'">
                       {{ subscriber.isActive ? '활성' : '비활성' }}
                     </span>
                   </td>
-                  <td class="actions">
-                    <button @click="toggleSubscriberStatus(subscriber)" class="btn btn-outline btn-small">
-                      {{ subscriber.isActive ? '비활성화' : '활성화' }}
-                    </button>
+                  <td>{{ formatDate(subscriber.subscribedAt) }}</td>
+                  <td>
+                    <!-- 액션 버튼 추가 -->
+                    <div class="action-buttons">
+                      <button
+                        v-if="subscriber.isActive"
+                        class="btn-action btn-secondary"
+                        @click="toggleSubscriberStatus(subscriber.id, false)"
+                        title="구독 비활성화">
+                        ⏸️
+                      </button>
+                      <button
+                        v-else
+                        class="btn-action btn-success"
+                        @click="toggleSubscriberStatus(subscriber.id, true)"
+                        title="구독 활성화">
+                        ▶️
+                      </button>
+                      <button
+                        class="btn-action btn-danger"
+                        @click="confirmDeleteSubscriber(subscriber.id, subscriber.email)"
+                        title="구독자 삭제">
+                        🗑️
+                      </button>
+                    </div>
                   </td>
                 </tr>
               </tbody>
             </table>
+            <div v-if="totalSubscriberPages > 1" class="pagination">
+              <button
+                @click="subscriberPage = Math.max(1, subscriberPage - 1)"
+                :disabled="subscriberPage === 1"
+                class="btn btn-secondary">
+                이전
+              </button>
+
+              <span class="page-info">
+                {{ subscriberPage }} / {{ totalSubscriberPages }}
+              </span>
+
+              <button
+                @click="subscriberPage = Math.min(totalSubscriberPages, subscriberPage + 1)"
+                :disabled="subscriberPage === totalSubscriberPages"
+                class="btn btn-secondary">
+                다음
+              </button>
+            </div>
           </div>
         </div>
 
@@ -895,11 +936,9 @@ export default {
 
       // 데이터
       events: [],
-      eventRequests: [],
-      subscribers: [],
       notices: [],
       recentActivity: [],      // 최근 활동
-      systemActivity: [],      // 시스템 활동 (새로 추가)
+      systemActivity: [],      // 시스템 활동
 
       // 필터
       requestFilter: 'all',
@@ -932,7 +971,19 @@ export default {
         defaultView: 'month',
         eventsPerPage: 20,
         showWeekNumbers: false
-      }
+      },
+
+
+      // 구독자 관련
+      subscribers: [],
+      subscriberPage: 1,
+
+      // 이벤트 요청 관련
+      eventRequests: [],
+      requestPage: 1,
+
+      // 공통 페이지네이션
+      itemsPerPage: 10,
     }
   },
 
@@ -948,6 +999,27 @@ export default {
       )
     },
 
+    // 구독자 페이지네이션
+    paginatedSubscribers() {
+      if (!this.subscribers || this.subscribers.length === 0) {
+        return []
+      }
+
+      const start = (this.subscriberPage - 1) * this.itemsPerPage
+      const end = start + this.itemsPerPage
+
+      return this.subscribers.slice(start, end)
+    },
+
+    // 구독자 전체 페이지 수
+    totalSubscriberPages() {
+      if (!this.subscribers || this.subscribers.length === 0) {
+        return 1
+      }
+      return Math.ceil(this.subscribers.length / this.itemsPerPage)
+    },
+
+    // 이벤트 요청 페이지네이션
     pendingRequests() {
       if (!this.eventRequests || !Array.isArray(this.eventRequests)) {
         return 0
@@ -956,6 +1028,14 @@ export default {
       return this.eventRequests.filter(request =>
         request && (request.status === 'pending' || request.status === 'PENDING')
       ).length
+    },
+
+    // 이벤트 요청 전체 페이지 수
+    totalRequestPages() {
+      if (!this.eventRequests || this.eventRequests.length === 0) {
+        return 1
+      }
+      return Math.ceil(this.eventRequests.length / this.itemsPerPage)
     },
 
     // 안전한 배열 접근을 위한 computed 속성들
@@ -1381,15 +1461,35 @@ export default {
     },
 
     // 구독자 관리
-    async toggleSubscriberStatus(subscriber) {
+    async toggleSubscriberStatus(subscriberId, newStatus) {
       try {
-        await emailSubscriptionAPI.updateSubscriberStatus(
-          subscriber.id,
-          !subscriber.isActive
-        )
+        await emailSubscriptionAPI.updateSubscriberStatus(subscriberId, newStatus)
         await this.loadDashboardData()
+        alert(`구독자 상태가 ${newStatus ? '활성화' : '비활성화'}되었습니다.`)
       } catch (error) {
         alert('구독자 상태 변경에 실패했습니다: ' + error.message)
+      }
+    },
+
+    async confirmDeleteSubscriber(subscriberId, email) {
+      const confirmed = confirm(
+        `정말로 이 구독자를 삭제하시겠습니까?\n\n이메일: ${email}\n\n이 작업은 되돌릴 수 없습니다.`
+      )
+
+      if (confirmed) {
+        try {
+          await emailSubscriptionAPI.deleteSubscriber(subscriberId)
+
+          // 구독자 목록에서 제거
+          this.subscribers = this.subscribers.filter(s => s.id !== subscriberId)
+
+          // 대시보드 데이터 다시 로드
+          await this.loadDashboardData()
+
+          alert('구독자가 삭제되었습니다.')
+        } catch (error) {
+          alert('구독자 삭제에 실패했습니다: ' + error.message)
+        }
       }
     },
 
@@ -2504,6 +2604,67 @@ export default {
   font-size: 13px;
   font-weight: 600;
   color: #374151;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.btn-action {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.btn-action:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.btn-action.btn-secondary {
+  background: #6c757d;
+  color: white;
+}
+
+.btn-action.btn-success {
+  background: #28a745;
+  color: white;
+}
+
+.btn-action.btn-danger {
+  background: #dc3545;
+  color: white;
+}
+
+.btn-action.btn-danger:hover {
+  background: #c82333;
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  margin-top: 20px;
+  padding: 15px;
+}
+
+.page-info {
+  font-weight: 600;
+  color: #333;
+  padding: 8px 16px;
+  background: #f0f0f0;
+  border-radius: 6px;
+}
+
+.pagination .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 @media (max-width: 1400px) {

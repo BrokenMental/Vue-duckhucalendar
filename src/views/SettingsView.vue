@@ -8,6 +8,7 @@
     </header>
 
     <div class="settings-content">
+      <!-- 알림 설정 -->
       <div class="setting-group">
         <h3>알림 설정</h3>
         <div class="settings-card">
@@ -17,40 +18,51 @@
               브라우저 알림 사용
             </label>
             <p class="setting-description">
-              일정 시간에 브라우저 알림을 받습니다.
+              일정 시간 전에 브라우저 알림을 받습니다.
             </p>
           </div>
 
           <div class="setting-item">
             <label>기본 알림 시간:</label>
-            <select v-model="settings.defaultNotificationTime">
-              <option value="09:00">오전 9시</option>
-              <option value="10:00">오전 10시</option>
-              <option value="11:00">오전 11시</option>
-              <option value="14:00">오후 2시</option>
+            <select v-model.number="settings.defaultNotificationMinutes">
+              <option value="0">일정 시작 시</option>
+              <option value="5">5분 전</option>
+              <option value="10">10분 전</option>
+              <option value="15">15분 전</option>
+              <option value="30">30분 전</option>
+              <option value="60">1시간 전</option>
+              <option value="120">2시간 전</option>
+              <option value="1440">1일 전</option>
             </select>
           </div>
         </div>
       </div>
 
+      <!-- 화면 설정 -->
       <div class="setting-group">
         <h3>화면 설정</h3>
         <div class="settings-card">
           <div class="setting-item">
-            <label>주 시작일:</label>
-            <select v-model="settings.weekStartDay">
-              <option value="0">일요일</option>
-              <option value="1">월요일</option>
+            <label>테마:</label>
+            <select v-model="settings.theme" @change="applyTheme">
+              <option value="system">시스템 설정</option>
+              <option value="light">라이트</option>
+              <option value="dark">다크</option>
+              <option value="unique">유니크 (그라데이션)</option>
             </select>
+            <p class="setting-description">
+              {{ getThemeDescription() }}
+            </p>
           </div>
 
           <div class="setting-item">
-            <label>테마:</label>
-            <select v-model="settings.theme">
-              <option value="light">라이트</option>
-              <option value="dark">다크</option>
-              <option value="auto">시스템 설정</option>
-            </select>
+            <label>
+              <input type="checkbox" v-model="settings.showWeekNumbers" />
+              주차 번호 표시
+            </label>
+            <p class="setting-description">
+              캘린더에 주차 번호를 표시합니다.
+            </p>
           </div>
         </div>
       </div>
@@ -74,15 +86,23 @@ export default {
     return {
       settings: {
         enableNotifications: true,
-        defaultNotificationTime: '09:00',
-        weekStartDay: 0, // 0: 일요일, 1: 월요일
-        theme: 'light'
+        defaultNotificationMinutes: 15,
+        theme: 'system',
+        showWeekNumbers: false
       }
     }
   },
 
   mounted() {
     this.loadSettings()
+    this.applyTheme()
+
+    // 브라우저 알림 권한 확인
+    if (this.settings.enableNotifications && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission()
+      }
+    }
   },
 
   methods: {
@@ -99,27 +119,118 @@ export default {
 
     saveSettings() {
       localStorage.setItem('calendar-settings', JSON.stringify(this.settings))
-      alert('설정이 저장되었습니다!')
+
+      // 브라우저 알림 권한 요청
+      if (this.settings.enableNotifications && 'Notification' in window) {
+        if (Notification.permission === 'default') {
+          Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+              alert('설정이 저장되었습니다!\n브라우저 알림이 활성화되었습니다.')
+            } else {
+              alert('설정이 저장되었습니다.\n브라우저 알림 권한이 거부되었습니다.')
+            }
+          })
+        } else {
+          alert('설정이 저장되었습니다!')
+        }
+      } else {
+        alert('설정이 저장되었습니다!')
+      }
     },
 
     resetSettings() {
       if (confirm('설정을 기본값으로 복원하시겠습니까?')) {
         this.settings = {
           enableNotifications: true,
-          defaultNotificationTime: '09:00',
-          weekStartDay: 0,
-          theme: 'light'
+          defaultNotificationMinutes: 15,
+          theme: 'system',
+          showWeekNumbers: false
         }
         this.saveSettings()
+        this.applyTheme()
+      }
+    },
+
+    applyTheme() {
+      const root = document.documentElement
+      const body = document.body
+
+      // 모든 테마 클래스 제거
+      root.classList.remove('theme-light', 'theme-dark', 'theme-unique')
+      body.classList.remove('theme-light', 'theme-dark', 'theme-unique')
+
+      let actualTheme = this.settings.theme
+
+      // 시스템 설정인 경우 실제 시스템 테마 감지
+      if (actualTheme === 'system') {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+        actualTheme = prefersDark ? 'dark' : 'light'
+      }
+
+      // 테마 클래스 추가
+      root.classList.add(`theme-${actualTheme}`)
+      body.classList.add(`theme-${actualTheme}`)
+
+      // 테마별 CSS 변수 설정
+      this.setThemeVariables(actualTheme)
+    },
+
+    setThemeVariables(theme) {
+      const root = document.documentElement
+
+      switch(theme) {
+        case 'dark':
+          root.style.setProperty('--bg-primary', '#1a1a1a')
+          root.style.setProperty('--bg-secondary', '#2d2d2d')
+          root.style.setProperty('--text-primary', '#ffffff')
+          root.style.setProperty('--text-secondary', '#b0b0b0')
+          root.style.setProperty('--border-color', '#404040')
+          break
+
+        case 'unique':
+          // 현재 그라데이션 배경 유지
+          root.style.setProperty('--bg-gradient', 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)')
+          break
+
+        case 'light':
+        default:
+          root.style.setProperty('--bg-primary', '#ffffff')
+          root.style.setProperty('--bg-secondary', '#f5f5f5')
+          root.style.setProperty('--text-primary', '#333333')
+          root.style.setProperty('--text-secondary', '#666666')
+          root.style.setProperty('--border-color', '#e0e0e0')
+          break
+      }
+    },
+
+    getThemeDescription() {
+      switch(this.settings.theme) {
+        case 'system':
+          return '시스템의 다크모드 설정을 따릅니다.'
+        case 'light':
+          return '밝은 테마를 사용합니다.'
+        case 'dark':
+          return '어두운 테마를 사용합니다.'
+        case 'unique':
+          return '보라색 그라데이션 배경을 사용합니다.'
+        default:
+          return ''
       }
     },
 
     goToCalendar() {
       this.$router.push('/')
     }
+  },
+
+  watch: {
+    'settings.theme': function() {
+      this.applyTheme()
+    }
   }
 }
 </script>
+
 
 <style scoped>
 .settings-page {
