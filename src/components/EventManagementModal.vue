@@ -120,6 +120,24 @@
               />
             </div>
 
+            <!-- 공휴일 설정 -->
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="form.isHoliday" />
+                공휴일로 설정
+              </label>
+            </div>
+
+            <div v-if="form.isHoliday" class="form-group">
+              <label>공휴일 타입</label>
+              <select v-model="form.holidayType">
+                <option value="PUBLIC">공휴일</option>
+                <option value="NATIONAL">국경일</option>
+                <option value="MEMORIAL">기념일</option>
+                <option value="SUBSTITUTE">대체공휴일</option>
+              </select>
+            </div>
+
             <div class="form-row">
               <div class="form-group">
                 <label for="color">색상</label>
@@ -244,7 +262,9 @@ export default {
         isFeatured: false,
         images: [],
         links: [],
-        linkTitles: []
+        linkTitles: [],
+        isHoliday: false,  // 공휴일 여부
+        holidayType: 'PUBLIC'  // 공휴일 타입
       },
       isSubmitting: false
     }

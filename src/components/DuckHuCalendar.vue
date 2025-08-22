@@ -2,7 +2,6 @@
   <div class="duckhu-calendar">
     <!-- 캘린더 헤더 -->
     <div class="calendar-header">
-      <!-- 데스크톱 버전 헤더 -->
       <div class="desktop-header">
         <button class="nav-button" @click="previousMonth">◀ 이전</button>
 
@@ -18,6 +17,11 @@
             </option>
           </select>
         </div>
+
+        <button @click="goToToday" class="today-btn">
+          <span class="today-icon">📅</span>
+          <span class="today-text">오늘</span>
+        </button>
 
         <button class="nav-button" @click="nextMonth">다음 ▶</button>
       </div>
@@ -84,9 +88,11 @@
               <!-- 주차 표시 - 매주 첫번째 날(일요일)에만 표시 -->
               <div v-if="dayIndex === 0 && getWeekNumberOfMonth(weekIndex) > 0" class="week-indicator"
                   :class="{ 'has-events': getTotalWeekScheduleCount(weekIndex) > 0 }">
-                <span class="week-number">{{ getWeekNumberOfMonth(weekIndex) }}주차</span>
-                <span v-if="getTotalWeekScheduleCount(weekIndex) > 0"
-                      class="event-count">{{ getTotalWeekScheduleCount(weekIndex) }}개</span>
+                <template v-if="showWeekNumbers">
+                  <span class="week-number">{{ getWeekNumberOfMonth(weekIndex) }}주차</span>
+                  <span v-if="getTotalWeekScheduleCount(weekIndex) > 0"
+                        class="event-count">{{ getTotalWeekScheduleCount(weekIndex) }}개</span>
+                </template>
               </div>
 
               <!-- 날짜 숫자와 일정 개수를 한 줄에 -->
@@ -161,7 +167,6 @@
             class="week-events-container"
             :style="getWeekContainerStyle(weekIndex)"
           >
-            <!-- 주차 표시 기능을 제거 - 이제 date-cell 안에 있음 -->
 
             <div
               v-for="event in events"
@@ -297,6 +302,8 @@ export default {
       // 하이라이트 관련
       highlightedDate: null,
       highlightAnimation: false,
+
+      showWeekNumbers: true
     }
   },
 
@@ -383,6 +390,12 @@ export default {
       this.updateEventCache()
       console.log('✅ 캘린더 초기화 완료')
     })
+
+    // localStorage에서 설정 불러오기
+    const savedShowWeekNumbers = localStorage.getItem('showWeekNumbers')
+    if (savedShowWeekNumbers !== null) {
+      this.showWeekNumbers = savedShowWeekNumbers === 'true'
+    }
 
     // 셀 너비 계산을 여러 번 시도하여 DOM이 완전히 렌더링된 후 실행
     const calculateCellWidthWithRetry = () => {
@@ -479,6 +492,13 @@ export default {
 
       // 캘린더 구조가 변경되었으므로 이벤트 캐시 무효화
       this.cachedWeekEvents = null
+    },
+
+    goToToday() {
+      const today = new Date()
+      this.selectedYear = today.getFullYear()
+      this.selectedMonth = today.getMonth()
+      this.generateCalendar()
     },
 
     /**
@@ -1320,6 +1340,19 @@ export default {
           this.highlightAnimation = false
         }, 3000)
       })
+    },
+
+    getWeekNumber(weekIndex) {
+      const firstDayOfYear = new Date(this.selectedYear, 0, 1)
+      const firstWeekDay = firstDayOfYear.getDay()
+      const currentWeek = Math.ceil((weekIndex * 7 + firstWeekDay) / 7)
+      return currentWeek
+    },
+
+    toggleWeekNumbers() {
+      this.showWeekNumbers = !this.showWeekNumbers
+      // localStorage에 저장
+      localStorage.setItem('showWeekNumbers', this.showWeekNumbers)
     }
   }
 }
@@ -1920,8 +1953,74 @@ export default {
   }
 }
 
-/* 모바일 반응형 디자인 수정 */
+.calendar-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  padding: 20px;
+  background: white;
+  border-radius: 12px 12px 0 0;
+}
+
+.today-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.today-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.today-btn:active {
+  transform: translateY(0);
+}
+
+.today-icon {
+  font-size: 16px;
+}
+
+.today-text {
+  font-size: 13px;
+}
+
+/* 라이트 테마에서 오늘 버튼 */
+.theme-light .today-btn {
+  background: #000000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.theme-light .today-btn:hover {
+  background: #333333;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+/* 반응형 */
 @media (max-width: 768px) {
+  .today-btn {
+    padding: 6px 12px;
+  }
+
+  .today-text {
+    display: none; /* 모바일에서는 텍스트 숨김 */
+  }
+
+  .today-icon {
+    font-size: 18px;
+  }
+
   .duckhu-calendar {
     margin: 10px;
     border-radius: 8px;
