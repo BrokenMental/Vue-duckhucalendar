@@ -955,9 +955,8 @@ export default {
       try {
         await adminAPI.requestTempPassword(this.loginForm.email)
         this.tempPasswordSent = true
-        alert('임시 비밀번호가 이메일로 발송되었습니다.')
       } catch (error) {
-        alert(error.message || '임시 비밀번호 발송에 실패했습니다.')
+        alert(error.message || '비밀번호 발송에 실패했습니다.')
       } finally {
         this.isLoading = false
       }
@@ -982,12 +981,18 @@ export default {
       }
     },
 
+    /**
+     * 로그아웃
+     */
     logout() {
       sessionStorage.removeItem('admin-token')
       this.isAuthenticated = false
       this.loginForm = { email: '', tempPassword: '' }
       this.tempPasswordSent = false
       this.activeTab = 'dashboard'
+
+      // 로그인 페이지로 리다이렉션 추가
+      this.$router.push('/admin-login')
     },
 
     // 대시보드 데이터 로드

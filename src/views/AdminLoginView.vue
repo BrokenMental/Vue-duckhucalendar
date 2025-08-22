@@ -82,7 +82,6 @@ export default {
       this.sending = true
       try {
         await adminAPI.requestTempPassword(this.email)
-        alert('임시 비밀번호가 이메일로 발송되었습니다.')
         this.step = 2
       } catch (error) {
         alert(error.message)
@@ -92,31 +91,25 @@ export default {
     },
 
     async login() {
-      if (!this.password) return
+      if (!this.password) {  // this.loginForm.tempPassword → this.password로 수정
+        alert('비밀번호를 입력해주세요.')
+        return
+      }
 
-      this.logging = true
+      this.logging = true  // this.isLoading → this.logging으로 수정
       try {
-        const response = await adminAPI.login(this.email, this.password)
-
-        // 토큰 저장
+        const response = await adminAPI.login(this.email, this.password)  // this.loginForm 제거
         sessionStorage.setItem('admin-token', response.token)
 
-        //alert('로그인 성공! 관리자 페이지로 이동합니다.')
-
-        // 원래 창을 관리자 페이지로 이동 후 창 닫기
-        if (window.opener) {
-          window.opener.location.href = '/admin'
-          window.close()
-        } else {
-          this.$router.push('/admin')
-        }
+        // 관리자 페이지로 이동
+        this.$router.push('/admin')
 
       } catch (error) {
-        alert(error.message)
+        alert(error.message || '로그인에 실패했습니다.')
       } finally {
-        this.logging = false
+        this.logging = false  // this.isLoading → this.logging으로 수정
       }
-    }
+    },
   }
 }
 </script>

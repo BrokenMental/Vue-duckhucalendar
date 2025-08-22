@@ -489,7 +489,27 @@ export const holidayUtils = {
       isValid: errors.length === 0,
       errors: errors
     }
-  }
+  },
+
+  /**
+   * 공휴일 타입별 한글 이름 반환
+   * @param {string} holidayType - 공휴일 타입
+   */
+  getHolidayTypeName(holidayType) {
+    if (!holidayType) {
+      return '기타';
+    }
+
+    const typeNames = {
+      'NATIONAL': '국경일',
+      'PUBLIC': '공휴일',
+      'SUBSTITUTE': '대체공휴일',
+      'MEMORIAL': '기념일',
+      'ANNIVERSARY': '기타'
+    };
+
+    return typeNames[holidayType] || '기타';
+  },
 }
 
 export default holidayAPI
