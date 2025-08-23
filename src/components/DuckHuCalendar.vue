@@ -498,7 +498,7 @@ export default {
       const today = new Date()
       this.selectedYear = today.getFullYear()
       this.selectedMonth = today.getMonth()
-      this.generateCalendar()
+      this.generateDuckHuCalendar()
     },
 
     /**

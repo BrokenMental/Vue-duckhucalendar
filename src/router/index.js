@@ -89,12 +89,26 @@ const router = createRouter({
  * 페이지 이동 전에 실행되는 함수
  */
 router.beforeEach(async (to, from, next) => {
+  // localStorage에서 관리자 설정 가져오기
+  const adminSettings = JSON.parse(localStorage.getItem('admin-settings') || '{}')
+  const siteTitle = adminSettings.siteTitle || '이벤트 캘린더'
+  const siteDescription = adminSettings.siteDescription || '다양한 이벤트를 확인하고 참여하세요'
+
   // 페이지 제목 설정
   if (to.meta && to.meta.title) {
-    document.title = `${to.meta.title} - Vue 이벤트 캘린더`
+    document.title = `${to.meta.title} - ${siteTitle}`
   } else {
-    document.title = 'Vue 이벤트 캘린더'
+    document.title = siteTitle
   }
+
+  // 메타 태그 설정 (SEO용)
+  let metaDescription = document.querySelector('meta[name="description"]')
+  if (!metaDescription) {
+    metaDescription = document.createElement('meta')
+    metaDescription.name = 'description'
+    document.head.appendChild(metaDescription)
+  }
+  metaDescription.content = to.meta.description || siteDescription
 
   // 관리자 페이지 접근 제어
   if (to.meta.requiresAuth && to.meta.adminOnly) {

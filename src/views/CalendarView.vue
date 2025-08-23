@@ -338,47 +338,26 @@ export default {
      */
     async loadUpcomingEvents() {
       try {
+        // 관리자 설정에서 페이지당 이벤트 수 가져오기
+        const adminSettings = JSON.parse(localStorage.getItem('admin-settings') || '{}')
+        const eventsPerPage = adminSettings.eventsPerPage || 20
+
         const today = new Date()
-        const futureDate = new Date(today)
-        futureDate.setDate(futureDate.getDate() + 30) // 30일 후까지
+        const startDate = this.formatDate(today)
 
-        const startDateStr = this.formatDate(today)
-        const endDateStr = this.formatDate(futureDate)
-
-        console.log('다가오는 이벤트 날짜 범위:', startDateStr, '~', endDateStr)
+        const endDate = new Date()
+        endDate.setMonth(endDate.getMonth() + 1)
+        const endDateStr = this.formatDate(endDate)
 
         const response = await scheduleAPI.getSchedulesByDateRange({
-          startDate: startDateStr,
-          endDate: endDateStr
+          startDate: startDate,
+          endDate: endDateStr,
+          limit: eventsPerPage  // 제한 적용
         })
 
-        // 오늘 이후의 일정만 필터링하고 정렬
-        const upcomingEvents = (response.schedules || response || [])
-          .filter(schedule => {
-            const scheduleDate = new Date(schedule.startDate)
-            return scheduleDate >= today
-          })
-          .sort((a, b) => {
-            // 1차: 날짜순
-            const dateCompare = a.startDate.localeCompare(b.startDate)
-            if (dateCompare !== 0) return dateCompare
-
-            // 2차: 우선순위순 (높은 순)
-            if (a.priority !== b.priority) {
-              return (a.priority || 3) - (b.priority || 3)
-            }
-
-            // 3차: 시간순
-            if (a.startTime && b.startTime) {
-              return a.startTime.localeCompare(b.startTime)
-            }
-
-            return 0
-          })
-          .slice(0, 2) // 최대 2개만
-
-        console.log(`📅 다가오는 이벤트 ${upcomingEvents.length}개 로드`)
-        return upcomingEvents
+        // 최대 개수만큼만 표시
+        const schedules = response.schedules || response || []
+        return schedules.slice(0, eventsPerPage)
 
       } catch (error) {
         console.error('다가오는 이벤트 로드 실패:', error)
@@ -391,43 +370,29 @@ export default {
      */
     async loadRecentEvents() {
       try {
-        // 최근 생성된 일정 조회
-        let response
-        try {
-          response = await scheduleAPI.getRecentSchedules(10) // 10개 조회 후 필터링
-        // eslint-disable-next-line no-unused-vars
-        } catch (apiError) {
-          console.log('최신 일정 API 없음, 대체 방법 사용')
+        const adminSettings = JSON.parse(localStorage.getItem('admin-settings') || '{}')
+        const eventsPerPage = adminSettings.eventsPerPage || 20
 
-          // 대체 방법: 최근 30일 데이터에서 추출
-          const today = new Date()
-          const thirtyDaysAgo = new Date(today)
-          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+        const today = new Date()
+        const endDate = this.formatDate(today)
 
-          const startDateStr = this.formatDate(thirtyDaysAgo)
-          const endDateStr = this.formatDate(today)
+        const startDate = new Date()
+        startDate.setDate(startDate.getDate() - 30)
+        const startDateStr = this.formatDate(startDate)
 
-          response = await scheduleAPI.getSchedulesByDateRange({
-            startDate: startDateStr,
-            endDate: endDateStr
-          })
-        }
+        const response = await scheduleAPI.getSchedulesByDateRange({
+          startDate: startDateStr,
+          endDate: endDate,
+          limit: eventsPerPage  // 제한 적용
+        })
 
-        // 최신 이벤트 정렬 및 필터링
-        const recentEvents = (response.schedules || response || [])
-          .sort((a, b) => {
-            // 생성일순 정렬 (최신순)
-            const createdAtA = new Date(a.createdAt || a.startDate)
-            const createdAtB = new Date(b.createdAt || b.startDate)
-            return createdAtB - createdAtA
-          })
-          .slice(0, 2) // 최대 2개만
-
-        console.log(`✨ 최신 이벤트 ${recentEvents.length}개 로드`)
-        return recentEvents
+        const schedules = response.schedules || response || []
+        return schedules
+          .filter(s => new Date(s.endDate) < today)
+          .slice(0, eventsPerPage)
 
       } catch (error) {
-        console.error('최신 이벤트 로드 실패:', error)
+        console.error('최근 이벤트 로드 실패:', error)
         return []
       }
     },
@@ -719,7 +684,7 @@ export default {
 .layout-container {
   display: flex;
   height: 100vh;
-  padding: 20px;
+  padding: 6px;
   gap: 20px;
   position: relative;
   overflow: hidden; /* 데스크톱에서는 스크롤 방지 */
@@ -825,6 +790,7 @@ export default {
 .event-item {
   cursor: pointer;
   position: relative;
+  padding: 5px;
 }
 
 .event-item.upcoming {
@@ -1229,7 +1195,6 @@ export default {
     overflow-y: auto; /* 모바일에서는 스크롤 허용 */
     height: auto;
     min-height: 100vh;
-    padding: 10px;
     gap: 10px;
   }
 
